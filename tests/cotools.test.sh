@@ -34,8 +34,31 @@ bad() {
 assert_eq() { [ "$1" = "$2" ] && ok || bad "$3 (got [$1] want [$2])"; }
 assert_contains() { case "$1" in *"$2"*) ok ;; *) bad "$3 ([$1] lacks [$2])" ;; esac }
 
-# current_os
-assert_eq "$(current_os)" "linux" "current_os is linux on this host"
+# current_os: exercise each supported host branch without depending on the
+# host that runs this test.
+HOST_UNAME="$(uname -s)"
+uname() { printf '%s\n' "${COTOOLS_TEST_UNAME:-$HOST_UNAME}"; }
+COTOOLS_TEST_UNAME=Linux
+assert_eq "$(current_os)" "linux" "current_os identifies Linux"
+COTOOLS_TEST_UNAME=Darwin
+assert_eq "$(current_os)" "macos" "current_os identifies macOS"
+COTOOLS_TEST_UNAME=Plan9
+assert_eq "$(current_os)" "unknown" "current_os identifies unsupported platforms"
+unset COTOOLS_TEST_UNAME
+
+# The manager must start without COTOOLS_HOME even when readlink lacks GNU -f
+# support, as on macOS. The fake rejects only the unsupported option; the
+# manager is executed directly so it should not need any other readlink form.
+BSD_READLINK_BIN="$SANDBOX/bsd-readlink-bin"
+mkdir -p "$BSD_READLINK_BIN"
+# shellcheck disable=SC2016
+# SC2016: the single-quoted strings are literal contents for the fake executable.
+printf '%s\n' '#!/usr/bin/env bash' 'if [ "${1:-}" = "-f" ]; then exit 1; fi' 'exec /usr/bin/readlink "$@"' >"$BSD_READLINK_BIN/readlink"
+chmod +x "$BSD_READLINK_BIN/readlink"
+startup_out="$(COTOOLS_HOME='' PATH="$BSD_READLINK_BIN:$PATH" bash "$REPO/bin/cotools" version cochat 2>&1)"
+startup_rc=$?
+assert_eq "$startup_rc" "0" "manager starts without GNU readlink -f"
+assert_eq "$startup_out" "cochat 1.0.0" "manager resolves its own prefix portably"
 
 # list_tools includes all three
 tools="$(list_tools | sort | tr '\n' ' ')"
@@ -50,9 +73,13 @@ assert_contains "$PLATFORM" "linux" "load_manifest: PLATFORM"
 load_manifest cosession
 assert_eq "$DEPS" "fzf jq codex" "cosession dependencies"
 
-# platform_ok: cobox is linux-only -> ok here; (no macos-only tool to test the negative)
+# platform_ok: cobox is linux-only, independent of the host that runs this test.
 load_manifest cobox
+COTOOLS_TEST_UNAME=Linux
 assert_eq "$(platform_ok && echo y || echo n)" "y" "platform_ok: cobox supported on linux"
+COTOOLS_TEST_UNAME=Darwin
+assert_eq "$(platform_ok && echo y || echo n)" "n" "platform_ok: cobox rejected on macOS"
+unset COTOOLS_TEST_UNAME
 assert_eq "$DEPS" "docker sysbox-runc codex" "cobox dependencies"
 
 # missing_deps: empty when deps present (fake PATH), names the gap when not
@@ -73,6 +100,18 @@ load_manifest cochat
 assert_eq "$(tool_enabled && echo y || echo n)" "y" "tool_enabled: true after enable"
 disable_tool cochat >/dev/null
 assert_eq "$([ -e "$COTOOLS_BIN/cochat" ] && echo y || echo n)" "n" "disable_tool: removes symlink"
+
+# Uninstall cleanup owns only manager links that point at this prefix. A
+# user-managed cotools link must survive, while our manager link is removable.
+FOREIGN_COTOOLS="$SANDBOX/foreign-cotools"
+printf '#!/usr/bin/env bash\n' >"$FOREIGN_COTOOLS"
+ln -s "$FOREIGN_COTOOLS" "$COTOOLS_BIN/cotools"
+remove_managed_links >/dev/null
+assert_eq "$([ -L "$COTOOLS_BIN/cotools" ] && echo y || echo n)" "y" "uninstall cleanup preserves foreign cotools link"
+rm "$COTOOLS_BIN/cotools"
+ln -s "$REPO/bin/cotools" "$COTOOLS_BIN/cotools"
+remove_managed_links >/dev/null
+assert_eq "$([ -e "$COTOOLS_BIN/cotools" ] && echo y || echo n)" "n" "uninstall cleanup removes owned cotools link"
 
 # cmd_list / cmd_version surface the tools
 assert_contains "$(cmd_list)" "cochat" "cmd_list: shows cochat"

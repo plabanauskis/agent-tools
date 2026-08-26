@@ -3,7 +3,21 @@
 # Sourceable for tests: strict mode + main run only when executed, not sourced.
 [[ "${BASH_SOURCE[0]}" == "${0}" ]] && set -euo pipefail
 
-SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+resolve_self() {
+  local source="${BASH_SOURCE[0]}" dir target
+  while [ -h "$source" ]; do
+    dir="$(cd -P "$(dirname "$source")" && pwd)"
+    target="$(readlink "$source")"
+    case "$target" in
+      /*) source="$target" ;;
+      *) source="$dir/$target" ;;
+    esac
+  done
+  dir="$(cd -P "$(dirname "$source")" && pwd)"
+  printf '%s/%s' "$dir" "$(basename "$source")"
+}
+
+SELF="$(resolve_self)"
 ROOT="${COTOOLS_HOME:-$(cd "$(dirname "$SELF")/.." && pwd)}"
 COTOOLS_TOOLS_DIR="$ROOT/tools"
 BIN_DIR="${COTOOLS_BIN:-$HOME/.local/bin}"
@@ -151,6 +165,22 @@ cmd_update() {
   echo "cotools: update complete."
 }
 
+remove_managed_links() {
+  local t c link entry manager_link
+  for t in $(list_tools); do
+    load_manifest "$t"
+    entry="$(entrypoint_path "$t")"
+    # shellcheck disable=SC2086
+    # SC2086: $COMMANDS is a space-separated list; word-splitting is intentional.
+    for c in $COMMANDS; do
+      link="$BIN_DIR/$c"
+      [ -L "$link" ] && [ "$(readlink "$link")" = "$entry" ] && rm -f "$link" && echo "removed $link"
+    done
+  done
+  manager_link="$BIN_DIR/cotools"
+  [ -L "$manager_link" ] && [ "$(readlink "$manager_link")" = "$ROOT/bin/cotools" ] && rm -f "$manager_link" && echo "removed $manager_link"
+}
+
 cmd_uninstall() {
   echo "cotools uninstall removes all command symlinks and the prefix dir:"
   echo "  prefix: $ROOT"
@@ -171,18 +201,7 @@ cmd_uninstall() {
     return 0
     ;;
   esac
-  local t c link entry
-  for t in $(list_tools); do
-    load_manifest "$t"
-    entry="$(entrypoint_path "$t")"
-    # shellcheck disable=SC2086
-    # SC2086: $COMMANDS is a space-separated list; word-splitting is intentional.
-    for c in $COMMANDS; do
-      link="$BIN_DIR/$c"
-      [ -L "$link" ] && [ "$(readlink "$link")" = "$entry" ] && rm -f "$link" && echo "removed $link"
-    done
-  done
-  [ -L "$BIN_DIR/cotools" ] && rm -f "$BIN_DIR/cotools" && echo "removed $BIN_DIR/cotools"
+  remove_managed_links
   rm -rf "$ROOT" && echo "removed $ROOT"
   echo "cotools uninstalled. Host is clean."
 }
