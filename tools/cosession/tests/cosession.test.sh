@@ -234,6 +234,69 @@ gone_preview="$(render_preview "$gone_rollout")"
 assert_contains "$gone_preview" '✗ directory gone' \
   'preview gone status [mutation: ignore missing cwd in preview]'
 
+# Simulated macOS/BSD utilities. These behavior doubles reject the GNU-only
+# flags unavailable on standard macOS, translate supported BSD forms to the
+# Linux host's real utilities, and leave the parser/picker itself real.
+REAL_DATE="$(command -v date)"
+REAL_FIND="$(command -v find)"
+REAL_STAT="$(command -v stat)"
+# shellcheck disable=SC2317 # invoked indirectly by sourced production helpers
+uname() { printf 'Darwin\n'; }
+# shellcheck disable=SC2317 # invoked indirectly by sourced production helpers
+date() {
+  case "${1:-}" in
+    -d)
+      printf 'simulated BSD date: -d is unsupported\n' >&2
+      return 64
+      ;;
+    -r)
+      local epoch="$2"
+      shift 2
+      "$REAL_DATE" -d "@$epoch" "$@"
+      ;;
+    *) "$REAL_DATE" "$@" ;;
+  esac
+}
+# shellcheck disable=SC2317 # invoked indirectly by sourced production helpers
+find() {
+  local arg
+  for arg in "$@"; do
+    if [ "$arg" = '-printf' ]; then
+      printf 'simulated BSD find: -printf is unsupported\n' >&2
+      return 64
+    fi
+  done
+  "$REAL_FIND" "$@"
+}
+# shellcheck disable=SC2317 # invoked indirectly by sourced production helpers
+stat() {
+  case "${1:-}" in
+    -c)
+      printf 'simulated BSD stat: -c is unsupported\n' >&2
+      return 64
+      ;;
+    -f)
+      if [ "${2:-}" != '%m' ]; then return 64; fi
+      "$REAL_STAT" -c %Y "$3"
+      ;;
+    *) "$REAL_STAT" "$@" ;;
+  esac
+}
+
+assert_eq "$(relative_time 0 1000000)" '1970-01-01' \
+  'relative_time BSD date [mutation: use GNU date -d on Darwin]'
+bsd_list="$(build_list 1787738400)"
+assert_eq "$(printf '%s\n' "$bsd_list" | grep -c $'\t' || true)" '3' \
+  'picker BSD discovery [mutation: use GNU find -printf on Darwin]'
+bsd_first="$(printf '%s\n' "$bsd_list" | sed -n '1p')"
+assert_contains "$bsd_first" "$cli_id" \
+  'picker BSD mtime sorting [mutation: use GNU stat -c on Darwin]'
+bsd_preview="$(render_preview "$cli_rollout")"
+assert_contains "$bsd_preview" 'active   2026-08-26 12:05' \
+  'preview BSD active time [mutation: use GNU stat/date flags on Darwin]'
+
+unset -f uname date find stat
+
 # Launch boundary: assert the real fake-process recorder output, not calls.
 FAKEBIN="$SANDBOX/fakebin"
 RECORDER="$SANDBOX/codex.record"

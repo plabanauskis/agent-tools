@@ -33,6 +33,21 @@ dir_status() { # <cwd> -> "live" | "gone"
   fi
 }
 
+format_epoch() { # <epoch> <format>: GNU date on Linux, BSD date on macOS
+  local epoch="$1" format="$2"
+  case "$(uname -s)" in
+    Darwin) date -r "$epoch" "$format" ;;
+    *) date -d "@$epoch" "$format" ;;
+  esac
+}
+
+file_mtime() { # <path>: integer modification epoch on GNU/BSD stat
+  case "$(uname -s)" in
+    Darwin) stat -f %m "$1" ;;
+    *) stat -c %Y "$1" ;;
+  esac
+}
+
 relative_time() { # <epoch> [now]
   local t="$1" now="${2:-$(date +%s)}" d
   d=$((now - t))
@@ -48,7 +63,7 @@ relative_time() { # <epoch> [now]
   elif ((d < 604800)); then
     printf '%dd ago' "$((d / 86400))"
   else
-    date -d "@$t" '+%Y-%m-%d'
+    format_epoch "$t" '+%Y-%m-%d'
   fi
 }
 
@@ -221,7 +236,11 @@ build_row() { # <rollout> <mtime_epoch> <now>
 
 build_list() { # <now>: recursively discover valid root rollouts newest first
   local now="$1" mtime rollout
-  find "$SESSIONS" -type f -name 'rollout-*.jsonl' -printf '%T@\t%p\n' 2>/dev/null |
+  find "$SESSIONS" -type f -name 'rollout-*.jsonl' -print 2>/dev/null |
+    while IFS= read -r rollout; do
+      mtime="$(file_mtime "$rollout" 2>/dev/null)" || continue
+      printf '%s\t%s\n' "$mtime" "$rollout"
+    done |
     sort -rn |
     while IFS=$'\t' read -r mtime rollout; do
       if is_root_session "$rollout"; then
@@ -243,7 +262,7 @@ render_preview() { # <rollout>: boxed session card
   local mtime status glyph status_text active
   local preview_width=46 border_width line
   IFS=$SEP read -r cwd branch summary id source < <(extract_session "$rollout")
-  mtime="$(stat -c %Y "$rollout" 2>/dev/null)"
+  mtime="$(file_mtime "$rollout" 2>/dev/null)"
   status="$(dir_status "$cwd")"
   if [ "$status" = live ]; then
     glyph='●'
@@ -252,7 +271,7 @@ render_preview() { # <rollout>: boxed session card
     glyph='✗'
     status_text='directory gone'
   fi
-  active="$(date -d "@$mtime" '+%Y-%m-%d %H:%M') · $(relative_time "$mtime")"
+  active="$(format_epoch "$mtime" '+%Y-%m-%d %H:%M') · $(relative_time "$mtime")"
   border_width=$((preview_width + 2))
 
   preview_line() { printf '│ %s │\n' "$(fit "$1" "$preview_width")"; }
