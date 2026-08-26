@@ -1,0 +1,8 @@
+# cosession — fzf picker to list and resume any Codex session.
+NAME=cosession
+ENTRYPOINT=cosession
+COMMANDS="cosession"
+DEPS="fzf jq codex"
+PLATFORM="linux macos"
+DESC="fzf picker to list and resume any Codex session"
+POST_ENABLE=""

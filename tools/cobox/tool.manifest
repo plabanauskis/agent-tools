@@ -1,0 +1,8 @@
+# cobox — sandboxed autonomous Codex via Docker + sysbox.
+NAME=cobox
+ENTRYPOINT=bin/cobox
+COMMANDS="cobox"
+DEPS="docker sysbox-runc codex"
+PLATFORM="linux"
+DESC="Sandboxed autonomous Codex via Docker + sysbox"
+POST_ENABLE="Run 'cobox build' once to build the sandbox image (~5 min, ~5GB). 'cobox doctor' verifies the sysbox runtime is registered with Docker."
