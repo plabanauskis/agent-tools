@@ -51,6 +51,15 @@ assert_contains() { # <haystack> <needle> <mutation>
   fi
 }
 
+assert_not_contains() { # <haystack> <needle> <mutation>
+  if [[ "$1" != *"$2"* ]]; then
+    pass
+  else
+    fail "$3
+  [$1] unexpectedly contains [$2]"
+  fi
+}
+
 assert_record_has() { # <literal token> <mutation>
   local token
   for token in "${RECORDED[@]}"; do
@@ -391,6 +400,86 @@ if command -v setsid >/dev/null 2>&1; then
     "non-Git gate: warning must explain that destructive edits cannot be recovered"
 else
   printf 'SKIP: setsid unavailable — unattended prompt tests skipped\n'
+fi
+
+# Build context follows the resolved launcher path, never an adjacent symlink
+# directory or an explicitly empty share directory. A regression to use the
+# symlink location would make packaged launches build from the wrong context.
+BUILD_LINK_DIR="$SANDBOX/bin-link"
+EMPTY_SHARE="$SANDBOX/empty-share"
+BUILD_RECORD="$SANDBOX/docker-build.args"
+mkdir -p "$BUILD_LINK_DIR" "$EMPTY_SHARE"
+ln -s "$COBOX" "$BUILD_LINK_DIR/cobox"
+cat >"$BIN/docker" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >"$DOCKER_RECORD"
+SH
+chmod +x "$BIN/docker"
+set +e
+PATH="$BIN:/usr/bin:/bin" \
+  HOME="$TEST_HOME" \
+  COBOX_SHARE_DIR="$EMPTY_SHARE" \
+  DOCKER_RECORD="$BUILD_RECORD" \
+  "$BUILD_LINK_DIR/cobox" build >/dev/null 2>&1
+build_rc=$?
+set -e
+assert_zero "$build_rc" \
+  "build context: resolving a launcher symlink must still locate the real cobox Dockerfile"
+if [ -f "$BUILD_RECORD" ]; then
+  mapfile -t RECORDED <"$BUILD_RECORD"
+  assert_eq "${RECORDED[${#RECORDED[@]} - 1]:-}" "$(cd "$HERE/.." && pwd)" \
+    "build context: an empty COBOX_SHARE_DIR must fall back to the real tools/cobox directory"
+else
+  fail "build context: docker build must receive a context directory"
+fi
+
+# These artifact contracts make accidental toolchain drift visible at review.
+DOCKERFILE="$HERE/../Dockerfile"
+if [ -f "$DOCKERFILE" ]; then
+  dockerfile_text="$(<"$DOCKERFILE")"
+  assert_contains "$dockerfile_text" "ARG NODE_MAJOR=24" \
+    "Dockerfile Node: changing the Node 24 build argument changes the supported toolchain"
+  assert_contains "$dockerfile_text" "ARG GO_VERSION=1.26.4" \
+    "Dockerfile Go: changing the Go 1.26.4 build argument changes the supported toolchain"
+  assert_contains "$dockerfile_text" "ARG DOTNET_CHANNEL=10.0" \
+    "Dockerfile .NET: changing the .NET 10 build argument changes the supported toolchain"
+  assert_not_contains "$dockerfile_text" "@openai/codex" \
+    "Dockerfile Codex: the image must not embed a host-authenticated Codex installation"
+  assert_contains "$dockerfile_text" "/etc/profile.d/cobox-toolchains.sh" \
+    "Dockerfile profiles: shell toolchain setup must remain available to interactive commands"
+else
+  fail "missing Dockerfile: cobox build needs its container context"
+fi
+
+# COBOX_NO_DOCKER is a host-controlled safety switch: command execution stays
+# available while no daemon probe/startup is attempted.
+ENTRYPOINT="$HERE/../entrypoint.sh"
+ENTRYPOINT_RECORD="$SANDBOX/entrypoint-docker.args"
+cat >"$BIN/docker" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$@" >>"$DOCKER_RECORD"
+exit 0
+SH
+chmod +x "$BIN/docker"
+set +e
+entrypoint_out="$(
+  PATH="$BIN:/usr/bin:/bin" \
+    DOCKER_RECORD="$ENTRYPOINT_RECORD" \
+    COBOX_NO_DOCKER=1 \
+    "$ENTRYPOINT" printf 'entrypoint command ran' 2>&1
+)"
+entrypoint_rc=$?
+set -e
+assert_zero "$entrypoint_rc" \
+  "entrypoint no-docker: disabling inner Docker must still execute the requested command"
+assert_eq "$entrypoint_out" "entrypoint command ran" \
+  "entrypoint no-docker: command stdout must survive the no-daemon path"
+if [ -e "$ENTRYPOINT_RECORD" ]; then
+  fake_docker_calls="$(<"$ENTRYPOINT_RECORD")"
+  assert_eq "$fake_docker_calls" "" \
+    "entrypoint no-docker: daemon checks or startup must be skipped when explicitly disabled"
+else
+  pass
 fi
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
