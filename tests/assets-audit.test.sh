@@ -6,7 +6,8 @@ HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$HERE/.." && pwd)"
 SANDBOX="$(mktemp -d)"
 FIXTURE="$ROOT/.legacy-audit-fixture"
-trap 'rm -rf "$SANDBOX"; rm -f "$FIXTURE"' EXIT
+WORKTREE_FIXTURE="$ROOT/.worktrees/.legacy-audit-fixture"
+trap 'rm -rf "$SANDBOX"; rm -f "$FIXTURE" "$WORKTREE_FIXTURE"' EXIT
 
 PASS=0
 FAIL=0
@@ -36,6 +37,15 @@ identifier_rc=$?
 assert_eq "$identifier_rc" '1' 'asset audit rejects underscore-delimited legacy identifiers'
 assert_contains "$identifier_out" '.legacy-audit-fixture' 'asset audit reports the matching file'
 rm -f "$FIXTURE"
+
+# A nested Git worktree is a separate checkout, not part of this checkout's
+# runtime/source surface, so its historical records must not poison the audit.
+mkdir -p "$(dirname "$WORKTREE_FIXTURE")"
+printf '%s%s\n' 'CC' 'TOOLS_HOME=/tmp/old-prefix' >"$WORKTREE_FIXTURE"
+(cd "$ROOT" && bash tests/assets.test.sh >/dev/null 2>&1)
+worktree_rc=$?
+assert_eq "$worktree_rc" '0' 'asset audit ignores nested worktree contents'
+rm -f "$WORKTREE_FIXTURE"
 
 # Search failures are audit failures, not an empty successful result.
 FAKEBIN="$SANDBOX/fakebin"

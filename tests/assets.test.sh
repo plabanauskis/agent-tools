@@ -68,6 +68,7 @@ need_text tools/cobox/README.md 'COBOX_SHARE_DIR'
 legacy_name_hits() { # <root>: 0=matches, 1=clean, >1=search error
   rg -n -i --hidden \
     --glob '!.git/**' \
+    --glob '!.worktrees/**' \
     --glob '!.superpowers/**' \
     --glob '!docs/superpowers/**' \
     --glob '!LICENSE' \
