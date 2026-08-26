@@ -5,7 +5,7 @@
   <img src="assets/logo.svg" alt="cobox" width="320">
 </picture>
 
-<p><strong>Give Codex full control of your project, never of your computer.</strong></p>
+<p><strong>Give Codex autonomous control of your project — cobox is designed to narrow the blast radius.</strong></p>
 
 <p>
   <a href="../../LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-555"></a>
@@ -15,7 +15,7 @@
 
 </div>
 
-`cobox` launches the exact host Codex installation in a sysbox-backed Docker container and passes `--dangerously-bypass-approvals-and-sandbox` to it. The result is autonomous work on a real mounted project, with Docker + sysbox providing the external containment boundary.
+`cobox` launches the exact host Codex installation in a sysbox-backed Docker container and passes `--dangerously-bypass-approvals-and-sandbox` to it. The result is autonomous work on a real mounted project, with Docker + sysbox narrowing the blast radius rather than providing an absolute safety guarantee.
 
 Run it from a Git repository whenever possible: the repository root is mounted and Git history is the practical undo path. Outside a Git repository, cobox explains that edits and deletions have no Git undo and asks for confirmation before continuing.
 
@@ -38,7 +38,7 @@ Codex's own CLI documentation warns that `--dangerously-bypass-approvals-and-san
 1. **Docker:** `docker --version` works without sudo, and `docker info -f '{{.Runtimes}}'` lists `sysbox-runc`.
 2. **sysbox:** install and configure a sysbox runtime for Docker. cobox does not support a non-sysbox runtime.
 3. **Host Codex:** `codex` is on `PATH`. cobox supports the official npm `@openai/codex` layout and a native executable; it mounts the resolved host installation rather than installing a second Codex inside the image.
-4. **Codex state and authentication:** run Codex on the host so `${CODEX_HOME:-$HOME/.codex}` exists. Codex supports local ChatGPT or API-key authentication through `codex login`; its state and credentials live under `CODEX_HOME` (default `~/.codex`) or in the OS keyring. See the official [authentication guide](https://learn.chatgpt.com/docs/auth).
+4. **Codex state and authentication:** run Codex on the host so `${CODEX_HOME:-$HOME/.codex}` exists. Codex supports local ChatGPT or API-key authentication through `codex login`; its state and credentials live under `CODEX_HOME` (default `~/.codex`) or in the OS keyring. cobox mounts `CODEX_HOME`, but it does not mount the host OS keyring. The container therefore needs usable file-backed state under the mounted `CODEX_HOME` or a supported passed environment credential such as `OPENAI_API_KEY` or `CODEX_ACCESS_TOKEN`. A successful host login or doctor check alone does not guarantee container authentication. See the official [authentication guide](https://learn.chatgpt.com/docs/auth).
 
 `cobox doctor` reports a failed `codex login status` as unhealthy, but launch does not block on that one check: an alternate valid authentication method, such as `OPENAI_API_KEY` or `CODEX_ACCESS_TOKEN`, may still authenticate inside the box.
 
@@ -52,7 +52,7 @@ cobox doctor
 cobox build
 ```
 
-The image defaults to `cobox:latest` and is built locally for the current username, UID, GID, and home path. Set `COBOX_IMAGE` to use another image name. The image includes Node 24, Python 3 + `uv`, Go 1.26.x, Rust stable, .NET 10, GitHub CLI, Git, jq, ripgrep, fd, OpenSSL, socat, and inner Docker + Compose. Codex itself is not baked in.
+The image defaults to `cobox:latest` and is built locally for the current username, UID, GID, and home path. Set `COBOX_IMAGE` to use another image name. Set `COBOX_SHARE_DIR` to a directory containing the cobox `Dockerfile` when the default installed build context is not appropriate. The image includes Node 24, Python 3 + `uv`, Go 1.26.x, Rust stable, .NET 10, GitHub CLI, Git, jq, ripgrep, fd, OpenSSL, socat, and inner Docker + Compose. Codex itself is not baked in.
 
 ## Usage
 

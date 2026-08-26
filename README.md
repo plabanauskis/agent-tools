@@ -55,6 +55,10 @@ No sudo, no `/usr` or `/etc` changes, and no daemons. The installer writes only 
 - `~/.local/share/cotools` — the Git clone, the single source of truth. Override with `COTOOLS_HOME`.
 - `~/.local/bin` — the `cotools` link and one link per enabled command. Override with `COTOOLS_BIN`.
 
+For a mirror or fork, set `COTOOLS_REPO` to the clone URL and `COTOOLS_BRANCH`
+to the branch before running `install.sh`; their defaults are this repository
+and `main`.
+
 If the bin directory is not on `PATH`, the installer prints the exact export to add to the shell startup file.
 
 To remove the suite, remove box runtime artifacts first if applicable:
@@ -73,10 +77,15 @@ cotools list                 # tools, state, versions, platform and dependency s
 cotools doctor [tool]        # dependency and platform checks
 cotools enable <tool>        # link a tool into ~/.local/bin
 cotools disable <tool>       # remove its link
-cotools update               # fast-forward the clone and re-link enabled tools
+cotools update               # update the managed clone and re-link enabled tools
 cotools version [tool]       # bundle or per-tool version
 cotools uninstall            # remove links and clone after confirmation
 ```
+
+`cotools update` treats its installed prefix as a managed mirror: when tracked
+files are clean, it fetches and prunes, then hard-resets to the configured
+upstream branch. This also handles rewritten upstream history. It refuses to
+overwrite tracked local changes; untracked files are left untouched.
 
 ## Security
 
