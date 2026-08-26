@@ -65,8 +65,15 @@ resolve_codex_install() {
   case "$executable" in
     */@openai/codex/bin/codex.js)
       package_root="${executable%/bin/codex.js}"
-      if [ ! -f "$package_root/package.json" ] ||
-        ! grep -Eq '"name"[[:space:]]*:[[:space:]]*"@openai/codex"' "$package_root/package.json"; then
+      if ! node -e '
+const fs = require("node:fs");
+try {
+  const packageJson = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  process.exit(packageJson.name === "@openai/codex" ? 0 : 1);
+} catch {
+  process.exit(1);
+}
+' "$package_root/package.json" 2>/dev/null; then
         echo "cobox: '$executable' matches the npm path, but package.json is not @openai/codex." >&2
         return 1
       fi

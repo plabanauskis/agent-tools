@@ -164,11 +164,43 @@ assert_nonzero "$bad_pkg_rc" \
 assert_contains "$bad_pkg_out" "package.json" \
   "resolve npm identity: package verification failure must identify package.json"
 
+nested_name_pkg="$SANDBOX/nested-name/lib/node_modules/@openai/codex"
+mkdir -p "$nested_name_pkg/bin"
+printf '{"name":"not-codex","metadata":{"name":"@openai/codex"}}\n' \
+  >"$nested_name_pkg/package.json"
+printf '#!/usr/bin/env node\n' >"$nested_name_pkg/bin/codex.js"
+chmod +x "$nested_name_pkg/bin/codex.js"
+set +e
+nested_name_out="$(resolve_codex_install "$nested_name_pkg/bin/codex.js" 2>&1)"
+nested_name_rc=$?
+set -e
+assert_nonzero "$nested_name_rc" \
+  "resolve npm top-level identity: accepting a nested official name admits a counterfeit package"
+assert_contains "$nested_name_out" "package.json" \
+  "resolve npm top-level identity: nested-name rejection must identify package.json"
+
+multiline_pkg="$SANDBOX/multiline/lib/node_modules/@openai/codex"
+mkdir -p "$multiline_pkg/bin"
+printf '{\n  "name"\n    :\n    "@openai/codex",\n  "version": "9.9.9"\n}\n' \
+  >"$multiline_pkg/package.json"
+printf '#!/usr/bin/env node\n' >"$multiline_pkg/bin/codex.js"
+chmod +x "$multiline_pkg/bin/codex.js"
+set +e
+multiline_out="$(resolve_codex_install "$multiline_pkg/bin/codex.js" 2>&1)"
+multiline_rc=$?
+set -e
+assert_zero "$multiline_rc" \
+  "resolve npm structural formatting: line-oriented matching rejects valid formatted package JSON"
+assert_eq "$multiline_out" \
+  "npm${SEP}$multiline_pkg/bin/codex.js${SEP}$multiline_pkg" \
+  "resolve npm structural formatting: valid JSON must preserve the resolver mount protocol"
+
 # Fake external boundary. Docker records literal argv tokens, so mount modes,
 # environment propagation, and Codex argument boundaries are observed exactly.
 BIN="$SANDBOX/bin"
 mkdir -p "$BIN"
 ln -s "$npm_pkg/bin/codex.js" "$BIN/codex"
+REAL_NODE="$(command -v node)"
 cat >"$BIN/docker" <<'SH'
 #!/usr/bin/env bash
 case "${1:-}" in
@@ -197,6 +229,9 @@ esac
 SH
 cat >"$BIN/node" <<'SH'
 #!/usr/bin/env bash
+if [ "${1:-}" = "-e" ]; then
+  exec "$REAL_NODE" "$@"
+fi
 exit "${FAKE_CODEX_LOGIN_RC:-0}"
 SH
 chmod +x "$BIN/docker" "$BIN/node"
@@ -219,6 +254,7 @@ run_launch() {
       HOME="$TEST_HOME" \
       CODEX_HOME="$CODEX_STATE" \
       DOCKER_RECORD="$record" \
+      REAL_NODE="$REAL_NODE" \
       COBOX_NO_TINT=1 \
       FAKE_CODEX_LOGIN_RC=1 \
       "$@" \
@@ -296,6 +332,7 @@ doctor_out="$(
   PATH="$BIN:/usr/bin:/bin" \
     HOME="$TEST_HOME" \
     CODEX_HOME="$CODEX_STATE" \
+    REAL_NODE="$REAL_NODE" \
     FAKE_CODEX_LOGIN_RC=1 \
     cobox_doctor 2>&1
 )"
@@ -318,6 +355,7 @@ if command -v setsid >/dev/null 2>&1; then
       HOME="$TEST_HOME" \
       CODEX_HOME="$CODEX_STATE" \
       DOCKER_RECORD="$SANDBOX/unused.args" \
+      REAL_NODE="$REAL_NODE" \
       COBOX_NO_TINT=1 \
       FAKE_IMAGE_PRESENT=0 \
       "$COBOX" 2>&1
@@ -339,6 +377,7 @@ if command -v setsid >/dev/null 2>&1; then
       HOME="$TEST_HOME" \
       CODEX_HOME="$CODEX_STATE" \
       DOCKER_RECORD="$SANDBOX/unused.args" \
+      REAL_NODE="$REAL_NODE" \
       COBOX_NO_TINT=1 \
       "$COBOX" 2>&1
   )"
