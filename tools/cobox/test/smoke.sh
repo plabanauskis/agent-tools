@@ -5,7 +5,7 @@ image="${1:-cobox:latest}"
 fail=0
 check() {
   printf '  %-10s ' "$1:"
-  if docker run --rm "$image" bash -lc "$2" >/dev/null 2>&1; then
+  if docker run --rm -e COBOX_NO_DOCKER=1 "$image" bash -lc "$2" >/dev/null 2>&1; then
     echo OK
   else
     echo FAIL
@@ -28,7 +28,7 @@ check fd "fd --version"
 check socat "socat -V"
 
 printf '  %-10s ' "non-root:"
-if docker run --rm "$image" bash -lc 'test "$(id -u)" -ne 0'; then
+if docker run --rm -e COBOX_NO_DOCKER=1 "$image" bash -lc 'test "$(id -u)" -ne 0'; then
   echo OK
 else
   echo FAIL
@@ -38,7 +38,21 @@ fi
 printf '  %-10s ' "inner-docker:"
 if docker info -f '{{.Runtimes}}' 2>/dev/null | grep -q sysbox-runc; then
   if docker run --rm --runtime=sysbox-runc "$image" bash -lc \
-    'sudo sh -c "dockerd >/tmp/d.log 2>&1 &"; until docker info >/dev/null 2>&1; do sleep 1; done; docker run --rm hello-world >/dev/null 2>&1'; then
+    'sudo sh -c "dockerd >/tmp/d.log 2>&1 &"
+     ready=0
+     for attempt in $(seq 1 30); do
+       if docker info >/dev/null 2>&1; then
+         ready=1
+         break
+       fi
+       sleep 1
+     done
+     if [ "$ready" -ne 1 ]; then
+       echo "inner Docker daemon did not become ready" >&2
+       cat /tmp/d.log >&2 || true
+       exit 1
+     fi
+     docker run --rm hello-world >/dev/null 2>&1'; then
     echo OK
   else
     echo FAIL
