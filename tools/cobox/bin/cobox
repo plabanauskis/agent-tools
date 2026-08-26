@@ -1,0 +1,395 @@
+#!/usr/bin/env bash
+
+COBOX_VERSION="1.0.0"
+IMAGE="${COBOX_IMAGE:-cobox:latest}"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cobox"
+CODEX_ROOT="${CODEX_HOME:-$HOME/.codex}"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+DEFAULT_PORTS="3000-3010"
+CACHE_VOLUMES=(cobox-npm cobox-cargo cobox-go cobox-uv cobox-nuget)
+SEP=$'\x1f'
+DOCKER_ARGS=()
+TINT="${COBOX_TINT:-#10281e}"
+
+cobox_usage() {
+  cat <<EOF
+cobox $COBOX_VERSION — sandboxed autonomous Codex
+
+Usage:
+  cobox [codex args...]   Launch the sandbox in the current dir
+  cobox build             Build/rebuild the image ($IMAGE) for your user
+  cobox doctor            Check prerequisites and configuration
+  cobox uninstall         Remove image + caches; prompt before data
+  cobox help              Show this help
+
+The first word decides: one of {build, doctor, uninstall, help, version} runs that
+command; anything else is passed unchanged to Codex inside the sandbox.
+
+The box runs as your host user, mounts the project and Codex state read-write at
+their real paths, and mounts the exact host Codex installation read-only. Docker
+with sysbox-runc supplies the security boundary around Codex's sandbox bypass.
+
+Env: COBOX_IMAGE, COBOX_PORTS, COBOX_NO_DOCKER, COBOX_SHARE_DIR, CODEX_HOME,
+     OPENAI_API_KEY, CODEX_ACCESS_TOKEN, COBOX_TINT, COBOX_NO_TINT=1
+EOF
+}
+
+find_share_dir() {
+  local directory
+  for directory in "${COBOX_SHARE_DIR:-/usr/share/cobox}" "$SCRIPT_DIR/.." "$SCRIPT_DIR/../share/cobox"; do
+    if [ -f "$directory/Dockerfile" ]; then
+      (cd "$directory" && pwd)
+      return 0
+    fi
+  done
+  return 1
+}
+
+resolve_codex_install() {
+  local candidate="${1:-}" executable package_root
+
+  if [ -z "$candidate" ]; then
+    candidate="$(command -v codex 2>/dev/null || true)"
+  fi
+  if [ -z "$candidate" ]; then
+    echo "cobox: host 'codex' not found on PATH. Install the official Codex CLI first." >&2
+    return 1
+  fi
+
+  executable="$(readlink -f "$candidate" 2>/dev/null || true)"
+  if [ -z "$executable" ] || [ ! -f "$executable" ] || [ ! -x "$executable" ]; then
+    echo "cobox: host Codex candidate '$candidate' is not an executable regular file." >&2
+    return 1
+  fi
+
+  case "$executable" in
+    */@openai/codex/bin/codex.js)
+      package_root="${executable%/bin/codex.js}"
+      if [ ! -f "$package_root/package.json" ] ||
+        ! grep -Eq '"name"[[:space:]]*:[[:space:]]*"@openai/codex"' "$package_root/package.json"; then
+        echo "cobox: '$executable' matches the npm path, but package.json is not @openai/codex." >&2
+        return 1
+      fi
+      printf 'npm%s%s%s%s\n' "$SEP" "$executable" "$SEP" "$package_root"
+      return 0
+      ;;
+  esac
+
+  if [ "$(head -c 2 "$executable" 2>/dev/null || true)" = '#!' ]; then
+    echo "cobox: unsupported scripted Codex layout at '$executable'." >&2
+    echo "cobox: supported layouts are @openai/codex/bin/codex.js and a native executable." >&2
+    return 1
+  fi
+
+  printf 'native%s%s%s%s\n' "$SEP" "$executable" "$SEP" "$executable"
+}
+
+cobox_build() {
+  local share
+  share="$(find_share_dir)" || {
+    echo "cobox: cannot find Dockerfile (set COBOX_SHARE_DIR to its directory)." >&2
+    return 1
+  }
+  echo "cobox: building $IMAGE from $share (user=$(id -un) UID=$(id -u) GID=$(id -g) home=$HOME)..."
+  docker build \
+    --build-arg UID="$(id -u)" --build-arg GID="$(id -g)" \
+    --build-arg USERNAME="$(id -un)" --build-arg USER_HOME="$HOME" \
+    -t "$IMAGE" "$share"
+}
+
+doctor_result() {
+  local label="$1" status="$2" message="$3"
+  if [ "$status" -eq 0 ]; then
+    printf '  %-12s ok\n' "$label"
+  else
+    printf '  %-12s MISSING — %s\n' "$label" "$message"
+  fi
+}
+
+cobox_doctor() {
+  local fail=0 install="" kind="" codex_exec="" mount_source=""
+
+  echo "cobox doctor ($COBOX_VERSION):"
+
+  if command -v docker >/dev/null 2>&1; then
+    doctor_result docker 0 ""
+  else
+    doctor_result docker 1 "install Docker"
+    fail=1
+  fi
+
+  if docker info -f '{{.Runtimes}}' 2>/dev/null | grep -q sysbox-runc; then
+    doctor_result sysbox 0 ""
+  else
+    doctor_result sysbox 1 "install sysbox-ce"
+    fail=1
+  fi
+
+  if install="$(resolve_codex_install "" 2>/dev/null)"; then
+    IFS="$SEP" read -r kind codex_exec mount_source <<<"$install"
+    doctor_result codex 0 ""
+  else
+    doctor_result codex 1 "install a supported official npm package or native Codex executable"
+    fail=1
+  fi
+
+  if [ -d "$CODEX_ROOT" ]; then
+    doctor_result state 0 ""
+  else
+    doctor_result state 1 "create $CODEX_ROOT by running codex on the host"
+    fail=1
+  fi
+
+  if [ -n "$codex_exec" ] && "$codex_exec" login status >/dev/null 2>&1; then
+    doctor_result login 0 ""
+  else
+    doctor_result login 1 "run 'codex login' on the host or configure alternate authentication"
+    fail=1
+  fi
+
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    doctor_result image 0 ""
+  else
+    doctor_result image 1 "run 'cobox build'"
+    fail=1
+  fi
+
+  if [ "$fail" -eq 0 ]; then
+    echo "All good."
+  else
+    echo "Some items need attention (see above)."
+  fi
+  return "$fail"
+}
+
+cobox_uninstall() {
+  local volume answer
+  local data=()
+
+  echo "cobox uninstall — removes runtime artifacts (not the installed program files)."
+  echo
+
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    if docker rmi "$IMAGE" >/dev/null 2>&1; then
+      echo "removed image $IMAGE"
+    else
+      echo "  (could not remove $IMAGE — is a container still using it?)"
+    fi
+  fi
+
+  for volume in "${CACHE_VOLUMES[@]}"; do
+    if docker volume inspect "$volume" >/dev/null 2>&1 &&
+      docker volume rm "$volume" >/dev/null 2>&1; then
+      echo "removed cache volume $volume"
+    fi
+  done
+
+  mapfile -t data < <(docker volume ls -q --filter name='^cobox-docker-' 2>/dev/null || true)
+  if [ "${#data[@]}" -gt 0 ]; then
+    echo
+    echo "Per-project DATA volumes (your databases):"
+    printf '  %s\n' "${data[@]}"
+    printf 'Delete these %d data volume(s)? This destroys their data. [y/N] ' "${#data[@]}"
+    read -r answer </dev/tty 2>/dev/null || answer=n
+    case "$answer" in
+      y | Y)
+        for volume in "${data[@]}"; do
+          if docker volume rm "$volume" >/dev/null 2>&1; then
+            echo "removed $volume"
+          fi
+        done
+        ;;
+      *) echo "kept data volumes." ;;
+    esac
+  fi
+
+  if [ -e "$CONFIG_DIR" ]; then
+    echo
+    printf 'Delete %s (legacy cobox config, no longer used)? [y/N] ' "$CONFIG_DIR"
+    read -r answer </dev/tty 2>/dev/null || answer=n
+    case "$answer" in
+      y | Y)
+        rm -rf "$CONFIG_DIR"
+        echo "removed $CONFIG_DIR"
+        ;;
+      *) echo "kept $CONFIG_DIR." ;;
+    esac
+  fi
+
+  echo
+  echo "Runtime teardown done. To remove the cobox command from cotools:"
+  echo "  cotools disable cobox"
+}
+
+build_docker_args() {
+  local repo_root="$1" kind="$2" codex_exec="$3" mount_source="$4"
+  local project port
+  local ports=("$DEFAULT_PORTS")
+
+  case "$kind" in
+    npm)
+      case "$codex_exec" in
+        "$mount_source"/*) ;;
+        *)
+          echo "cobox: npm executable is outside its package mount." >&2
+          return 1
+          ;;
+      esac
+      ;;
+    native)
+      if [ "$codex_exec" != "$mount_source" ]; then
+        echo "cobox: native executable and mount source must be identical." >&2
+        return 1
+      fi
+      ;;
+    *)
+      echo "cobox: unknown Codex installation kind '$kind'." >&2
+      return 1
+      ;;
+  esac
+
+  if [ -n "${COBOX_PORTS:-}" ]; then
+    read -r -a extra_ports <<<"$COBOX_PORTS"
+    ports+=("${extra_ports[@]}")
+  fi
+  if [ -f "$repo_root/.cobox/ports" ]; then
+    while IFS= read -r port; do
+      [ -n "$port" ] && ports+=("$port")
+    done <"$repo_root/.cobox/ports"
+  fi
+
+  project="$(printf '%s' "$(basename "$repo_root")" | tr -c 'A-Za-z0-9_.-' '_')"
+  DOCKER_ARGS=(docker run -it --rm
+    --runtime=sysbox-runc
+    -e "HOME=$HOME"
+    -e "TERM=${TERM:-xterm-256color}"
+    -e "COBOX=1"
+    -e "COBOX_VERSION=$COBOX_VERSION"
+    -e "CODEX_HOME=$CODEX_ROOT"
+    -v "$repo_root:$repo_root" -w "$repo_root"
+    -v "$CODEX_ROOT:$CODEX_ROOT"
+    -v "$mount_source:$mount_source:ro"
+    -v "cobox-docker-$project:/var/lib/docker")
+
+  if [ -f "$HOME/.gitconfig" ]; then
+    DOCKER_ARGS+=(-v "$HOME/.gitconfig:$HOME/.gitconfig:ro")
+  fi
+  for port in "${ports[@]}"; do
+    DOCKER_ARGS+=(-p "$port:$port")
+  done
+  if [ -n "${OPENAI_API_KEY:-}" ]; then
+    DOCKER_ARGS+=(-e "OPENAI_API_KEY=$OPENAI_API_KEY")
+  fi
+  if [ -n "${CODEX_ACCESS_TOKEN:-}" ]; then
+    DOCKER_ARGS+=(-e "CODEX_ACCESS_TOKEN=$CODEX_ACCESS_TOKEN")
+  fi
+  if [ -n "${COBOX_NO_DOCKER:-}" ]; then
+    DOCKER_ARGS+=(-e "COBOX_NO_DOCKER=$COBOX_NO_DOCKER")
+  fi
+
+  DOCKER_ARGS+=(-v "cobox-npm:$HOME/.npm"
+    -v "cobox-cargo:$HOME/.cargo/registry"
+    -v "cobox-go:$HOME/go/pkg"
+    -v "cobox-uv:$HOME/.cache/uv"
+    -v "cobox-nuget:$HOME/.nuget/packages")
+}
+
+emit_osc() {
+  if [ -w /dev/tty ]; then
+    printf '%b' "$1" >/dev/tty 2>/dev/null
+  fi
+  return 0
+}
+
+set_tint() {
+  [ "${COBOX_NO_TINT:-0}" = "1" ] || emit_osc "\033]11;${TINT}\007"
+}
+
+clear_tint() {
+  [ "${COBOX_NO_TINT:-0}" = "1" ] || emit_osc "\033]111\007"
+}
+
+main() {
+  local repo_root answer install kind codex_exec mount_source
+
+  case "${1:-}" in
+    build)
+      shift
+      cobox_build "$@"
+      return
+      ;;
+    doctor)
+      shift
+      cobox_doctor "$@"
+      return
+      ;;
+    uninstall)
+      shift
+      cobox_uninstall "$@"
+      return
+      ;;
+    help)
+      cobox_usage
+      return 0
+      ;;
+    version)
+      echo "cobox $COBOX_VERSION"
+      return 0
+      ;;
+  esac
+
+  if repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    :
+  else
+    repo_root="$(pwd -P)"
+    echo "cobox: '$repo_root' is not a git repository." >&2
+    echo "cobox: Codex runs autonomously with approvals and its sandbox bypassed; without" >&2
+    echo "cobox: git history its edits and deletions have NO undo. The directory is writable." >&2
+    printf 'Continue anyway? [y/N] ' >&2
+    read -r answer </dev/tty 2>/dev/null || answer=n
+    case "$answer" in
+      y | Y) ;;
+      *)
+        echo "cobox: aborted." >&2
+        return 1
+        ;;
+    esac
+  fi
+
+  if ! docker info -f '{{.Runtimes}}' 2>/dev/null | grep -q sysbox-runc; then
+    echo "cobox: sysbox runtime not found. Install sysbox-ce." >&2
+    return 1
+  fi
+
+  install="$(resolve_codex_install "")" || return 1
+  IFS="$SEP" read -r kind codex_exec mount_source <<<"$install"
+
+  if [ ! -d "$CODEX_ROOT" ]; then
+    echo "cobox: Codex state directory '$CODEX_ROOT' does not exist." >&2
+    echo "cobox: run 'codex' on the host first or set CODEX_HOME to an existing directory." >&2
+    return 1
+  fi
+
+  if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "cobox: image '$IMAGE' not found." >&2
+    printf 'Build it now? (~5 min, ~5GB) [y/N] ' >&2
+    read -r answer </dev/tty 2>/dev/null || answer=n
+    case "$answer" in
+      y | Y) cobox_build || return 1 ;;
+      *)
+        echo "cobox: run 'cobox build' first." >&2
+        return 1
+        ;;
+    esac
+  fi
+
+  build_docker_args "$repo_root" "$kind" "$codex_exec" "$mount_source" || return 1
+  set_tint
+  trap clear_tint EXIT INT TERM
+  "${DOCKER_ARGS[@]}" "$IMAGE" "$codex_exec" \
+    --dangerously-bypass-approvals-and-sandbox "$@"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi
