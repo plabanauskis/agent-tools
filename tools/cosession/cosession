@@ -1,0 +1,342 @@
+#!/usr/bin/env bash
+# cosession — list and resume root Codex CLI and Desktop sessions.
+#
+# No global set -e: missing optional metadata and an empty fzf selection are
+# normal control flow. Each boundary handles its own failure explicitly.
+
+CODEX_ROOT="${CODEX_HOME:-$HOME/.codex}"
+SESSIONS="$CODEX_ROOT/sessions"
+INDEX="$CODEX_ROOT/session_index.jsonl"
+HISTORY="$CODEX_ROOT/history.jsonl"
+
+WHEN_W=10
+DIR_W=38
+BRANCH_W=8
+SUM_W=72
+DIM=$'\e[2m'
+RESET=$'\e[0m'
+SEP=$'\x1f'
+
+# Preserve an invokable path for fzf's preview process. An installed symlink
+# or command name is already suitable and avoids a dependency on readlink -f.
+if [[ "$0" == */* ]]; then
+  SELF="$0"
+else
+  SELF="$(command -v -- "$0" 2>/dev/null || printf '%s' "$0")"
+fi
+
+dir_status() { # <cwd> -> "live" | "gone"
+  if [ -n "$1" ] && [ -d "$1" ]; then
+    printf 'live'
+  else
+    printf 'gone'
+  fi
+}
+
+relative_time() { # <epoch> [now]
+  local t="$1" now="${2:-$(date +%s)}" d
+  d=$((now - t))
+  ((d < 0)) && d=0
+  if ((d < 60)); then
+    printf 'just now'
+  elif ((d < 3600)); then
+    printf '%dm ago' "$((d / 60))"
+  elif ((d < 86400)); then
+    printf '%dh ago' "$((d / 3600))"
+  elif ((d < 172800)); then
+    printf 'yesterday'
+  elif ((d < 604800)); then
+    printf '%dd ago' "$((d / 86400))"
+  else
+    date -d "@$t" '+%Y-%m-%d'
+  fi
+}
+
+fit() { # <text> <width>: truncate, then right-pad to the requested width
+  local text="$1" width="$2"
+  ((${#text} > width)) && text="${text:0:width}"
+  printf '%s%*s' "$text" "$((width - ${#text}))" ''
+}
+
+trunc() { # <text> <width>: truncate with a trailing ellipsis
+  local text="$1" width="$2"
+  if ((${#text} > width)); then
+    printf '%s…' "${text:0:width-1}"
+  else
+    printf '%s' "$text"
+  fi
+}
+
+dashes() { # <count>
+  local count="$1" out=''
+  while ((count-- > 0)); do
+    out="${out}─"
+  done
+  printf '%s' "$out"
+}
+
+shorten_dir() { # <path> [width=DIR_W]
+  local path="$1" width="${2:-$DIR_W}"
+  if [[ "$path" == "$HOME" ]]; then
+    path='~'
+  elif [[ "$path" == "$HOME"/* ]]; then
+    # shellcheck disable=SC2088 # literal ~ is display text, not expansion
+    path="~/${path#"$HOME"/}"
+  fi
+
+  if ((${#path} <= width)); then
+    printf '%s' "$path"
+    return
+  fi
+
+  local IFS=/ count
+  local -a parts
+  read -ra parts <<<"$path"
+  count=${#parts[@]}
+  if ((count >= 4)); then
+    path="${parts[0]}/…/${parts[count - 2]}/${parts[count - 1]}"
+  fi
+  if ((${#path} > width)); then
+    path="…${path: -$((width - 1))}"
+  fi
+  printf '%s' "$path"
+}
+
+branch_label() { # <branch>
+  case "$1" in
+    '' | HEAD) printf '—' ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+normalize_summary() { # <text>: one printable delimiter-safe line
+  local text="$1"
+  text="${text//$SEP/ }"
+  text="${text//$'\t'/ }"
+  text="${text//$'\r'/ }"
+  text="${text//$'\n'/ }"
+  printf '%s' "$text" | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//'
+}
+
+session_meta() { # <rollout> -> id<SEP>cwd<SEP>branch<SEP>source
+  local rollout="$1"
+  jq -rs --arg sep "$SEP" '
+    first(.[] | select(.type == "session_meta") | .payload) as $meta
+    | if $meta == null then empty else
+        [
+          (($meta.id // $meta.session_id // "") | if type == "string" then . else "" end),
+          (($meta.cwd // "") | if type == "string" then . else "" end),
+          (($meta.git.branch // "") | if type == "string" then . else "" end),
+          (($meta.source // "") | if type == "string" then . else "" end)
+        ]
+        | map(gsub("[\t\n\u001f]"; " "))
+        | join($sep)
+      end
+  ' "$rollout" 2>/dev/null
+}
+
+is_root_session() { # <rollout>: valid UUID/cwd and a string source
+  local rollout="$1" id cwd branch source
+  IFS=$SEP read -r id cwd branch source < <(session_meta "$rollout")
+  [ -n "$id" ] && [ -n "$cwd" ] && [ -n "$source" ]
+}
+
+session_summary() { # <rollout> <id>
+  local rollout="$1" id="$2" summary=''
+
+  if [ -f "$INDEX" ]; then
+    summary="$(jq -rs --arg id "$id" '
+      [ .[]
+        | select(.id == $id)
+        | .thread_name
+        | select(type == "string" and length > 0)
+      ]
+      | last // empty
+    ' "$INDEX" 2>/dev/null)"
+    summary="$(normalize_summary "$summary")"
+  fi
+
+  if [ -z "$summary" ] && [ -f "$HISTORY" ]; then
+    summary="$(jq -rs --arg id "$id" '
+      [ .[]
+        | select(.session_id == $id)
+        | .text
+        | select(type == "string" and length > 0)
+      ][0] // empty
+    ' "$HISTORY" 2>/dev/null)"
+    summary="$(normalize_summary "$summary")"
+  fi
+
+  if [ -z "$summary" ]; then
+    summary="$(jq -rs '
+      [ .[]
+        | select(
+            .type == "response_item"
+            and .payload.type == "message"
+            and .payload.role == "user"
+          )
+        | .payload.content[]?
+        | select(.type == "input_text")
+        | .text
+        | select(
+            type == "string"
+            and length > 0
+            and (startswith("<environment_context>") | not)
+          )
+      ][0] // empty
+    ' "$rollout" 2>/dev/null)"
+    summary="$(normalize_summary "$summary")"
+  fi
+
+  if [ -n "$summary" ]; then
+    printf '%s' "$summary"
+  else
+    printf '%s' "$id"
+  fi
+}
+
+extract_session() { # <rollout> -> cwd<SEP>branch<SEP>summary<SEP>id<SEP>source
+  local rollout="$1" id cwd branch source summary
+  IFS=$SEP read -r id cwd branch source < <(session_meta "$rollout")
+  summary="$(session_summary "$rollout" "$id")"
+  printf '%s%s%s%s%s%s%s%s%s\n' \
+    "$cwd" "$SEP" "$branch" "$SEP" "$summary" "$SEP" "$id" "$SEP" "$source"
+}
+
+build_row() { # <rollout> <mtime_epoch> <now>
+  local rollout="$1" mtime="$2" now="$3"
+  local cwd branch summary id source status glyph
+  local whenf dirf branchf summaryf row
+  IFS=$SEP read -r cwd branch summary id source < <(extract_session "$rollout")
+  status="$(dir_status "$cwd")"
+  if [ "$status" = live ]; then glyph='●'; else glyph='✗'; fi
+  whenf="$(fit "$(relative_time "$mtime" "$now")" "$WHEN_W")"
+  dirf="$(fit "$(shorten_dir "$cwd")" "$DIR_W")"
+  branchf="$(fit "$(branch_label "$branch")" "$BRANCH_W")"
+  summaryf="$(trunc "$summary" "$SUM_W")"
+  row="  ${glyph}  ${whenf}  ${dirf}  ${branchf}  ${summaryf}"
+  [ "$status" = gone ] && row="${DIM}${row}${RESET}"
+  printf '%s\t%s\n' "$row" "$rollout"
+}
+
+build_list() { # <now>: recursively discover valid root rollouts newest first
+  local now="$1" mtime rollout
+  find "$SESSIONS" -type f -name 'rollout-*.jsonl' -printf '%T@\t%p\n' 2>/dev/null |
+    sort -rn |
+    while IFS=$'\t' read -r mtime rollout; do
+      if is_root_session "$rollout"; then
+        build_row "$rollout" "${mtime%.*}" "$now"
+      fi
+    done
+}
+
+make_header() { # <count>
+  local count="$1" hint columns rule
+  hint="  cosession · ${count} sessions · ↑↓ select · / filter · ⏎ resume"
+  columns="  ●  $(fit 'WHEN' "$WHEN_W")  $(fit 'DIRECTORY' "$DIR_W")  $(fit 'BRANCH' "$BRANCH_W")  SUMMARY"
+  rule="  ─  $(dashes "$WHEN_W")  $(dashes "$DIR_W")  $(dashes "$BRANCH_W")  $(dashes 30)"
+  printf '%s\n\n%s\n%s' "$hint" "$columns" "$rule"
+}
+
+render_preview() { # <rollout>: boxed session card
+  local rollout="$1" cwd branch summary id source
+  local mtime status glyph status_text active
+  local preview_width=46 border_width line
+  IFS=$SEP read -r cwd branch summary id source < <(extract_session "$rollout")
+  mtime="$(stat -c %Y "$rollout" 2>/dev/null)"
+  status="$(dir_status "$cwd")"
+  if [ "$status" = live ]; then
+    glyph='●'
+    status_text='live'
+  else
+    glyph='✗'
+    status_text='directory gone'
+  fi
+  active="$(date -d "@$mtime" '+%Y-%m-%d %H:%M') · $(relative_time "$mtime")"
+  border_width=$((preview_width + 2))
+
+  preview_line() { printf '│ %s │\n' "$(fit "$1" "$preview_width")"; }
+
+  printf '┌─ session %s┐\n' "$(dashes "$((border_width - 10))")"
+  preview_line "${glyph} ${status_text}"
+  preview_line ''
+  preview_line "dir      $(shorten_dir "$cwd" "$((preview_width - 9))")"
+  preview_line "branch   $(branch_label "$branch")"
+  preview_line "source   $source"
+  preview_line "active   $active"
+  preview_line "id       $id"
+  printf '├%s┤\n' "$(dashes "$border_width")"
+  while IFS= read -r line; do
+    preview_line "$line"
+  done < <(printf '%s\n' "$summary" | fold -s -w "$preview_width")
+  printf '└%s┘\n' "$(dashes "$border_width")"
+
+  unset -f preview_line
+}
+
+usage() {
+  cat <<'EOF'
+cosession — list and resume Codex sessions
+
+Usage:
+  cosession            open the session picker
+  cosession --help     show this help
+
+In the picker: type to filter, ↑/↓ to move, Enter to resume the highlighted
+session from its original directory with `codex resume <uuid>`. Sessions whose
+directory no longer exists are shown with ✗ and cannot be resumed.
+EOF
+}
+
+launch() { # <rollout>
+  local rollout="$1" cwd branch summary id source
+  IFS=$SEP read -r cwd branch summary id source < <(extract_session "$rollout")
+  if [ -d "$cwd" ]; then
+    cd "$cwd" || {
+      printf 'cannot cd into: %s\n' "$cwd" >&2
+      exit 1
+    }
+    exec codex resume "$id"
+  fi
+  printf 'directory no longer exists, cannot resume: %s\n' "$cwd" >&2
+  exit 1
+}
+
+main() {
+  case "${1:-}" in
+    --preview)
+      render_preview "$2"
+      return 0
+      ;;
+    -h | --help)
+      usage
+      return 0
+      ;;
+  esac
+
+  local now list count header selected
+  now="$(date +%s)"
+  list="$(build_list "$now")"
+  if [ -z "$list" ]; then
+    printf 'no Codex sessions found under %s\n' "$SESSIONS" >&2
+    return 1
+  fi
+  count="$(printf '%s\n' "$list" | grep -c '')"
+  header="$(make_header "$count")"
+  selected="$(printf '%s\n' "$list" | fzf \
+    --ansi \
+    --delimiter=$'\t' \
+    --with-nth=1 \
+    --layout=reverse \
+    --header-first \
+    --header="$header" \
+    --preview="$SELF --preview {2}" \
+    --preview-window='right,52,wrap')"
+
+  [ -z "$selected" ] && return 0
+  launch "${selected##*$'\t'}"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi
