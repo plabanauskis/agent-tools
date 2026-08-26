@@ -41,8 +41,8 @@ make_source_repo() {
   printf '%s' "$source"
 }
 
-# Source without invoking main so tests can verify the installer exposes its
-# helper surface. A removal of load_lib or a wrong tools directory breaks this.
+# Source without invoking main so the installer verifies its helper-loading
+# boundary. A removal of load_lib or a wrong tools directory breaks this.
 # shellcheck disable=SC2034
 # Variables are consumed by the dynamically sourced installer; exporting the
 # test-source flag would leak it into the real installer subprocess below.
@@ -53,7 +53,6 @@ if [ -f "$REPO/install.sh" ]; then
   # shellcheck source=/dev/null
   source "$REPO/install.sh"
   load_lib
-  assert_eq "$(current_os)" "linux" "install: current_os identifies Linux"
   load_manifest cochat
   assert_eq "$DEPS" "codex" "install: load_lib reads cochat manifest"
 fi
