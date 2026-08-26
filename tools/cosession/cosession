@@ -153,7 +153,8 @@ session_meta() { # <rollout> -> id<SEP>cwd<SEP>branch<SEP>source
 is_root_session() { # <rollout>: valid UUID/cwd and a string source
   local rollout="$1" id cwd branch source
   IFS=$SEP read -r id cwd branch source < <(session_meta "$rollout")
-  [ -n "$id" ] && [ -n "$cwd" ] && [ -n "$source" ]
+  [[ "$id" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]] &&
+    [ -n "$cwd" ] && [ -n "$source" ]
 }
 
 session_summary() { # <rollout> <id>

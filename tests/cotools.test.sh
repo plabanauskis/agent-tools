@@ -101,6 +101,19 @@ assert_eq "$(tool_enabled && echo y || echo n)" "y" "tool_enabled: true after en
 disable_tool cochat >/dev/null
 assert_eq "$([ -e "$COTOOLS_BIN/cochat" ] && echo y || echo n)" "n" "disable_tool: removes symlink"
 
+# --force overrides platform constraints as well as missing dependencies.
+load_manifest cobox
+COTOOLS_TEST_UNAME=Darwin
+# shellcheck disable=SC2034 # consumed by enable_tool from the sourced manager
+FORCE=1
+enable_tool cobox >/dev/null
+forced_rc=$?
+assert_eq "$forced_rc" "0" "enable_tool: force accepts unsupported platform"
+assert_eq "$(readlink "$COTOOLS_BIN/cobox" 2>/dev/null)" "$REPO/tools/cobox/bin/cobox" \
+  "enable_tool: force links unsupported tool"
+disable_tool cobox >/dev/null
+unset COTOOLS_TEST_UNAME
+
 # Uninstall cleanup owns only manager links that point at this prefix. A
 # user-managed cotools link must survive, while our manager link is removable.
 FOREIGN_COTOOLS="$SANDBOX/foreign-cotools"

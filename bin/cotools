@@ -41,7 +41,7 @@ tool_enabled() { # uses $NAME/$COMMANDS/$ENTRYPOINT (manifest must be loaded)
 
 enable_tool() {
   load_manifest "$1"
-  if ! platform_ok; then
+  if ! platform_ok && [ "${FORCE:-0}" != "1" ]; then
     echo "cotools: $1 does not support $(current_os) (PLATFORM=\"$PLATFORM\")" >&2
     return 1
   fi

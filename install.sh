@@ -8,6 +8,7 @@ REPO_URL="${COTOOLS_REPO:-https://github.com/plabanauskis/cotools.git}"
 COTOOLS_HOME="${COTOOLS_HOME:-$HOME/.local/share/cotools}"
 BIN_DIR="${COTOOLS_BIN:-$HOME/.local/bin}"
 BRANCH="${COTOOLS_BRANCH:-main}"
+KNOWN_TOOLS="cochat cosession cobox"
 
 # Source the shared manifest helpers from the (already-cloned) prefix. Called
 # after clone_or_update — the lib is never needed before the clone exists.
@@ -33,7 +34,7 @@ clone_or_update() {
 # Link one tool's command(s); records into ENABLED / SKIPPED / POST.
 link_tool() {
   load_manifest "$1"
-  if ! platform_ok; then
+  if ! platform_ok && [ "${FORCE:-0}" != "1" ]; then
     SKIPPED+=("$1: unsupported on $(current_os) (needs $PLATFORM); enable later: cotools enable $1")
     return 1
   fi
@@ -126,7 +127,7 @@ Usage:
 
   --all           Enable every tool (subject to platform/deps unless --force).
   --tools=LIST    Enable only the named tools (comma-separated).
-  --force         Link even when a tool's deps are missing.
+  --force         Link even when platform support or dependencies are missing.
   (no selection)  Interactive prompt if a TTY is available, else auto-select
                   every platform-matching, deps-clean tool (skips are printed).
 
@@ -135,13 +136,45 @@ Env: COTOOLS_HOME (prefix, default ~/.local/share/cotools),
 EOF
 }
 
+known_tool() { # <name>: pre-clone catalog for validating --tools selections
+  local known
+  local IFS=' '
+  for known in $KNOWN_TOOLS; do
+    [ "$known" = "$1" ] && return 0
+  done
+  return 1
+}
+
+select_explicit_tools() { # <csv>: validate and populate SELECTED before clone/update
+  local csv="$1" t
+  local IFS=,
+  if [ -z "$csv" ]; then
+    echo "install.sh: --tools requires a comma-separated selection" >&2
+    usage >&2
+    return 1
+  fi
+  # shellcheck disable=SC2086
+  # Deliberate word-splitting: $csv is an IFS=, delimited list of tool names.
+  for t in $csv; do
+    if ! known_tool "$t"; then
+      echo "install.sh: unknown tool '$t' (available: ${KNOWN_TOOLS// /, })" >&2
+      usage >&2
+      return 1
+    fi
+    SELECTED+=("$t")
+  done
+}
+
 main() {
   FORCE=0
-  local sel_all=0 sel_csv='' a
+  local sel_all=0 sel_tools=0 sel_csv='' a
   for a in "$@"; do
     case "$a" in
       --all) sel_all=1 ;;
-      --tools=*) sel_csv="${a#--tools=}" ;;
+      --tools=*)
+        sel_tools=1
+        sel_csv="${a#--tools=}"
+        ;;
       --force) FORCE=1 ;;
       -h | --help)
         usage
@@ -155,6 +188,11 @@ main() {
     esac
   done
 
+  SELECTED=()
+  if [ "$sel_tools" = 1 ]; then
+    select_explicit_tools "$sel_csv" || return 1
+  fi
+
   command -v git >/dev/null 2>&1 || {
     echo "install.sh: git is required" >&2
     return 1
@@ -163,7 +201,6 @@ main() {
   clone_or_update
   load_lib # shared manifest helpers now available (current_os, list_tools, ...)
 
-  SELECTED=()
   ENABLED=()
   SKIPPED=()
   POST=()
@@ -172,17 +209,9 @@ main() {
     # shellcheck disable=SC2086
     # Deliberate word-splitting: $(list_tools) returns a newline-separated list.
     for t in $(list_tools); do SELECTED+=("$t"); done
-  elif [ -n "$sel_csv" ]; then
-    local IFS=, t
-    # shellcheck disable=SC2086
-    # Deliberate word-splitting: $sel_csv is an IFS=, delimited list of tool names.
-    for t in $sel_csv; do
-      if [ -d "$COTOOLS_HOME/tools/$t" ]; then SELECTED+=("$t"); else echo "install.sh: unknown tool '$t' (ignored)" >&2; fi
-    done
-    unset IFS
-  elif have_tty; then
+  elif [ "$sel_tools" != 1 ] && have_tty; then
     select_tools_interactive
-  else
+  elif [ "$sel_tools" != 1 ]; then
     select_tools_auto
   fi
 

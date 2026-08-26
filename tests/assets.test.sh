@@ -65,17 +65,24 @@ need_text tools/cobox/README.md 'COBOX_SHARE_DIR'
 # Do not let the active source and public docs regress to the prior suite's
 # names, runtime, authentication, or accent. Historical port records and the
 # MIT attribution are intentionally excluded.
-legacy_hits="$(rg -n -i --hidden \
-  --glob '!.git/**' \
-  --glob '!.superpowers/**' \
-  --glob '!docs/superpowers/**' \
-  --glob '!LICENSE' \
-  --glob '!tests/assets.test.sh' \
-  -e '\b(cctools|cchat|ccsession|ccbox)\b' \
-  -e 'Claude Code|~/.claude|dangerously-skip-permissions|\bclaude (resume|login)' \
-  -e 'ANTHROPIC_(API_KEY|AUTH_TOKEN)' \
-  -e '#D97757' . 2>/dev/null || true)"
-if [ -n "$legacy_hits" ]; then
+legacy_name_hits() { # <root>: 0=matches, 1=clean, >1=search error
+  rg -n -i --hidden \
+    --glob '!.git/**' \
+    --glob '!.superpowers/**' \
+    --glob '!docs/superpowers/**' \
+    --glob '!LICENSE' \
+    --glob '!tests/assets.test.sh' \
+    -e '(^|[^[:alnum:]])(cctools|cchat|ccsession|ccbox)([^[:alnum:]]|$)' \
+    -e 'Claude Code|~/.claude|dangerously-skip-permissions|\bclaude (resume|login)' \
+    -e 'ANTHROPIC_(API_KEY|AUTH_TOKEN)' \
+    -e '#D97757' "$1"
+}
+
+legacy_status=0
+legacy_hits="$(legacy_name_hits .)" || legacy_status=$?
+if [ "$legacy_status" -gt 1 ]; then
+  fail "legacy-name audit failed (rg exit $legacy_status)"
+elif [ -n "$legacy_hits" ]; then
   fail "legacy public/runtime/auth/color term outside approved historical context:\n$legacy_hits"
 fi
 

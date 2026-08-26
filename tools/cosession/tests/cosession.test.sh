@@ -46,6 +46,7 @@ desktop_id='22222222-2222-4222-8222-222222222222'
 subagent_id='33333333-3333-4333-8333-333333333333'
 gone_id='44444444-4444-4444-8444-444444444444'
 missing_id='55555555-5555-4555-8555-555555555555'
+invalid_id='not-a-uuid'
 
 cli_rollout="$SESSIONS_DIR/rollout-2026-08-26T10-00-00-$cli_id.jsonl"
 desktop_rollout="$SESSIONS_DIR/rollout-2026-08-26T11-00-00-$desktop_id.jsonl"
@@ -53,6 +54,7 @@ subagent_rollout="$SESSIONS_DIR/rollout-2026-08-26T12-00-00-$subagent_id.jsonl"
 gone_rollout="$SESSIONS_DIR/rollout-2026-08-26T09-00-00-$gone_id.jsonl"
 missing_uuid_rollout="$SESSIONS_DIR/rollout-missing-uuid.jsonl"
 missing_cwd_rollout="$SESSIONS_DIR/rollout-missing-cwd.jsonl"
+invalid_uuid_rollout="$SESSIONS_DIR/rollout-invalid-uuid.jsonl"
 
 cat >"$cli_rollout" <<JSONL
 {"timestamp":"2026-08-26T10:00:00Z","type":"session_meta","payload":{"id":"$cli_id","cwd":"$LIVE_CWD","source":"cli","originator":"codex-tui","git":{"branch":"main"}}}
@@ -82,6 +84,10 @@ cat >"$missing_cwd_rollout" <<JSONL
 {"timestamp":"2026-08-26T07:00:00Z","type":"session_meta","payload":{"id":"$missing_id","source":"cli"}}
 JSONL
 
+cat >"$invalid_uuid_rollout" <<JSONL
+{"timestamp":"2026-08-26T06:00:00Z","type":"session_meta","payload":{"id":"$invalid_id","cwd":"$LIVE_CWD","source":"cli"}}
+JSONL
+
 cat >"$CODEX_HOME/session_index.jsonl" <<JSONL
 {"id":"$cli_id","thread_name":"Initial CLI thread"}
 {"id":"$desktop_id","thread_name":""}
@@ -101,6 +107,7 @@ touch -t 202608261155 "$subagent_rollout"
 touch -t 202608261150 "$gone_rollout"
 touch -t 202608261145 "$missing_uuid_rollout"
 touch -t 202608261140 "$missing_cwd_rollout"
+touch -t 202608261135 "$invalid_uuid_rollout"
 
 # shellcheck source=/dev/null
 source "$COSESSION"
@@ -162,6 +169,8 @@ assert_eq "$(is_root_session "$subagent_rollout" && echo yes || echo no)" 'no' \
   'is_root_session subagent [mutation: accept structured source objects]'
 assert_eq "$(is_root_session "$missing_uuid_rollout" && echo yes || echo no)" 'no' \
   'is_root_session UUID validation [mutation: accept empty UUID]'
+assert_eq "$(is_root_session "$invalid_uuid_rollout" && echo yes || echo no)" 'no' \
+  'is_root_session UUID shape [mutation: accept an arbitrary nonempty ID]'
 assert_eq "$(is_root_session "$missing_cwd_rollout" && echo yes || echo no)" 'no' \
   'is_root_session cwd validation [mutation: accept empty cwd]'
 
@@ -202,6 +211,8 @@ assert_eq "$(printf '%s\n' "$list" | grep -c "$subagent_id" || true)" '0' \
   'picker omits subagent [mutation: build rows without root-source filtering]'
 assert_eq "$(printf '%s\n' "$list" | grep -c 'rollout-missing-' || true)" '0' \
   'picker omits malformed [mutation: list rollouts without UUID/cwd validation]'
+assert_eq "$(printf '%s\n' "$list" | grep -c 'rollout-invalid-uuid' || true)" '0' \
+  'picker omits invalid UUID shape [mutation: filter only empty IDs]'
 assert_eq "$(printf '%s\n' "$list" | grep -c $'\t' || true)" '3' \
   'picker root count [mutation: omit CLI, Desktop, or session_id-root rollout]'
 first="$(printf '%s\n' "$list" | sed -n '1p')"

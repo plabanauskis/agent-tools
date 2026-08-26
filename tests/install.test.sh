@@ -15,6 +15,14 @@ for dep in codex fzf jq; do
   printf '#!/usr/bin/env bash\n' >"$FAKEBIN/$dep"
   chmod +x "$FAKEBIN/$dep"
 done
+REAL_UNAME="$(command -v uname)"
+{
+  # shellcheck disable=SC2016 # fake executable needs literal environment references
+  printf '%s\n' '#!/usr/bin/env bash' 'if [ -n "${COTOOLS_TEST_UNAME:-}" ]; then' \
+    '  printf "%s\\n" "$COTOOLS_TEST_UNAME"' '  exit 0' 'fi'
+  printf 'exec %q "$@"\n' "$REAL_UNAME"
+} >"$FAKEBIN/uname"
+chmod +x "$FAKEBIN/uname"
 
 PASS=0
 FAIL=0
@@ -61,6 +69,18 @@ fi
 SOURCE_REPO="$(make_source_repo)"
 PREFIX="$SANDBOX/prefix"
 BIN="$SANDBOX/bin"
+
+# Explicit selections are preflighted before a clone can mutate the prefix.
+UNKNOWN_PREFIX="$SANDBOX/unknown-prefix"
+unknown_out="$(COTOOLS_REPO="file://$SOURCE_REPO" COTOOLS_HOME="$UNKNOWN_PREFIX" COTOOLS_BIN="$BIN" \
+  COTOOLS_BRANCH=main PATH="$FAKEBIN:$PATH" HOME="$SANDBOX/home" \
+  bash "$REPO/install.sh" --tools=cochat,not-a-tool 2>&1)"
+unknown_rc=$?
+assert_eq "$unknown_rc" "1" "install: unknown tool selection fails"
+assert_eq "$([ -e "$UNKNOWN_PREFIX" ] && echo y || echo n)" "n" "install: validates tools before cloning prefix"
+assert_contains "$unknown_out" "unknown tool 'not-a-tool'" "install: identifies unknown tool"
+assert_contains "$unknown_out" "Usage:" "install: unknown tool prints guidance"
+
 out="$(COTOOLS_REPO="file://$SOURCE_REPO" COTOOLS_HOME="$PREFIX" COTOOLS_BIN="$BIN" \
   COTOOLS_BRANCH=main PATH="$FAKEBIN:$PATH" HOME="$SANDBOX/home" \
   bash "$REPO/install.sh" --tools=cochat,cosession 2>&1)"
@@ -76,6 +96,20 @@ COTOOLS_REPO="file://$SOURCE_REPO" COTOOLS_HOME="$PREFIX" COTOOLS_BIN="$BIN" \
   COTOOLS_BRANCH=main PATH="$FAKEBIN:$PATH" HOME="$SANDBOX/home" \
   bash "$REPO/install.sh" --tools=cochat >/dev/null 2>&1
 assert_eq "$?" "0" "install: idempotent re-run succeeds"
+
+# --force overrides both dependency and platform constraints. Simulate macOS
+# so the Linux-only cobox manifest is unsupported on every test host.
+FORCED_PREFIX="$SANDBOX/forced-prefix"
+FORCED_BIN="$SANDBOX/forced-bin"
+forced_out="$(COTOOLS_TEST_UNAME=Darwin COTOOLS_REPO="file://$SOURCE_REPO" \
+  COTOOLS_HOME="$FORCED_PREFIX" COTOOLS_BIN="$FORCED_BIN" COTOOLS_BRANCH=main \
+  PATH="$FAKEBIN:$PATH" HOME="$SANDBOX/home" \
+  bash "$REPO/install.sh" --tools=cobox --force 2>&1)"
+forced_rc=$?
+assert_eq "$forced_rc" "0" "install: force accepts unsupported platform"
+assert_contains "$forced_out" "cobox" "install: force reports unsupported tool as enabled"
+assert_eq "$(readlink "$FORCED_BIN/cobox" 2>/dev/null)" "$FORCED_PREFIX/tools/cobox/bin/cobox" \
+  "install: force links unsupported tool"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"
 [ "$FAIL" -eq 0 ]
