@@ -20,6 +20,17 @@ need_file() {
   [ -f "$1" ] || fail "missing asset: $1"
 }
 
+need_readme() {
+  [ -f "$1" ] || fail "missing README: $1"
+}
+
+need_text() {
+  local file="$1" text="$2"
+  if ! grep -Fq -- "$text" "$file"; then
+    fail "missing required documentation text in $file: $text"
+  fi
+}
+
 has_rendered_color() {
   local file="$1" color="$2"
   convert -background none "$file" -resize 512x512 -depth 8 -format '%c' histogram:info:- |
@@ -31,6 +42,35 @@ for tool in cochat cosession cobox; do
     need_file "tools/$tool/assets/$asset"
   done
 done
+
+# README contracts: keep public installation, independence, state, and isolation
+# statements present without constraining the explanatory prose around them.
+for readme in README.md tools/cochat/README.md tools/cosession/README.md tools/cobox/README.md; do
+  need_readme "$readme"
+done
+need_text README.md 'curl -fsSL https://raw.githubusercontent.com/plabanauskis/cotools/main/install.sh | bash'
+need_text README.md 'not affiliated with or endorsed by OpenAI'
+need_text tools/cosession/README.md 'CODEX_HOME'
+need_text tools/cosession/README.md "\$HOME/.codex"
+need_text tools/cobox/README.md '--dangerously-bypass-approvals-and-sandbox'
+need_text tools/cobox/README.md 'never mounts the host Docker socket'
+
+# Do not let the active source and public docs regress to the prior suite's
+# names, runtime, authentication, or accent. Historical port records and the
+# MIT attribution are intentionally excluded.
+legacy_hits="$(rg -n -i --hidden \
+  --glob '!.git/**' \
+  --glob '!.superpowers/**' \
+  --glob '!docs/superpowers/**' \
+  --glob '!LICENSE' \
+  --glob '!tests/assets.test.sh' \
+  -e '\b(cctools|cchat|ccsession|ccbox)\b' \
+  -e 'Claude Code|~/.claude|dangerously-skip-permissions|\bclaude (resume|login)' \
+  -e 'ANTHROPIC_(API_KEY|AUTH_TOKEN)' \
+  -e '#D97757' . 2>/dev/null || true)"
+if [ -n "$legacy_hits" ]; then
+  fail "legacy public/runtime/auth/color term outside approved historical context:\n$legacy_hits"
+fi
 
 if [ "$failures" -ne 0 ]; then
   exit 1
