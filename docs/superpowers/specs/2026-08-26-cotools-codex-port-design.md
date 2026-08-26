@@ -341,7 +341,10 @@ The port preserves source exit semantics and adds Codex-specific validation:
 - Empty session stores, malformed rollouts, missing working directories, and
   failed directory changes produce specific errors without launching Codex.
 - `cobox` stops before Docker launch when sysbox, host Codex, supported host
-  installation, Codex state/login, or image requirements fail.
+  installation, Codex state, or image requirements fail. Login health is
+  reported by `cobox doctor`; launch leaves the final authentication decision
+  to Codex because mounted state, `OPENAI_API_KEY`, `CODEX_ACCESS_TOKEN`, and
+  platform credential stores can satisfy authentication differently.
 - Destructive uninstall actions remain explicitly confirmed and default to no
   without a controlling terminal.
 
@@ -425,4 +428,3 @@ The port is complete when:
 6. Node Trail SVG/PNG assets render correctly in both light and dark contexts.
 7. `scripts/check.sh` completes with all applicable checks passing and only
    environment-gated checks skipped with an explicit reason.
-
