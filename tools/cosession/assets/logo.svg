@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" fill="none" role="img" aria-label="cosession wordmark">
+  <title>cosession wordmark</title>
+  <rect x="44" y="46" width="60" height="16" rx="4" fill="#16181D"/>
+  <rect x="44" y="70" width="64" height="16" rx="4" fill="#10A37F"/>
+  <rect x="44" y="94" width="48" height="16" rx="4" fill="#16181D"/>
+  <circle cx="32" cy="54" r="4" fill="#10A37F" opacity=".4"/><circle cx="32" cy="78" r="4" fill="#10A37F" opacity=".7"/><circle cx="32" cy="102" r="4" fill="#10A37F"/>
+  <text x="144" y="80" dominant-baseline="central" font-family="DejaVu Sans" font-size="60" font-weight="700" fill="#16181D">cosession</text>
+  <path d="M144 112H213" stroke="#10A37F" stroke-width="6" stroke-linecap="round"/>
+</svg>

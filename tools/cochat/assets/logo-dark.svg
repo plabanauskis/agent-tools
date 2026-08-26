@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="160" viewBox="0 0 360 160" fill="none" role="img" aria-label="cochat wordmark for dark backgrounds">
+  <title>cochat wordmark for dark backgrounds</title>
+  <rect x="32" y="44" width="80" height="56" rx="14" fill="#F4F1EA"/>
+  <polygon points="52,96 48,118 72,96" fill="#F4F1EA"/>
+  <circle cx="57" cy="72" r="5" fill="#10A37F"/>
+  <circle cx="72" cy="72" r="5" fill="#10A37F" opacity=".7"/>
+  <circle cx="87" cy="72" r="5" fill="#10A37F" opacity=".4"/>
+  <text x="144" y="80" dominant-baseline="central" font-family="DejaVu Sans" font-size="52" font-weight="700" fill="#F4F1EA">cochat</text>
+  <path d="M144 108H204" stroke="#10A37F" stroke-width="6" stroke-linecap="round"/>
+</svg>

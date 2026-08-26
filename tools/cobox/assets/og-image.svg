@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" fill="none" role="img" aria-label="cobox — Give Codex full control of your project, never of your computer.">
+  <title>cobox social image</title>
+  <rect width="1280" height="640" fill="#14161B"/>
+  <g transform="translate(1170,560) scale(7) translate(-72,-80)" fill="#202226">
+    <polygon points="72,40 108,58 72,76 36,58"/><polygon points="36,58 72,76 72,120 36,102"/><polygon points="72,76 108,58 108,102 72,120"/>
+  </g>
+  <g transform="translate(640,170) scale(2.4) translate(-72,-80)">
+    <polygon points="72,40 108,58 72,76 36,58" fill="#10A37F"/><polygon points="36,58 72,76 72,120 36,102" fill="#F4F1EA"/><polygon points="72,76 108,58 108,102 72,120" fill="#16181D" stroke="#F4F1EA" stroke-opacity=".2"/>
+    <circle cx="59" cy="57" r="3.5" fill="#F4F1EA"/><circle cx="72" cy="63.5" r="3.5" fill="#F4F1EA" opacity=".7"/><circle cx="85" cy="57" r="3.5" fill="#F4F1EA" opacity=".4"/>
+  </g>
+  <text x="640" y="360" text-anchor="middle" font-family="DejaVu Sans" font-size="104" font-weight="700" fill="#F4F1EA">cobox</text>
+  <path d="M480 384H599" stroke="#10A37F" stroke-width="8" stroke-linecap="round"/>
+  <text x="640" y="462" text-anchor="middle" font-family="'DejaVu Sans',sans-serif" font-size="40" font-weight="600" fill="#F4F1EA">Give Codex full control of your project,</text>
+  <text x="640" y="514" text-anchor="middle" font-family="'DejaVu Sans',sans-serif" font-size="40" font-weight="600" fill="#F4F1EA">never of your computer.</text>
+  <text x="640" y="596" text-anchor="middle" font-family="ui-monospace,'DejaVu Sans Mono',monospace" font-size="26" fill="#10A37F" opacity=".85">github.com/plabanauskis/cotools</text>
+</svg>
