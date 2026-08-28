@@ -4,8 +4,7 @@
 # ~/.local/bin. Sourceable for tests via PITOOLS_TEST_SOURCE=1.
 [ "${PITOOLS_TEST_SOURCE:-0}" = "1" ] || set -euo pipefail
 
-INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_URL="${PITOOLS_REPO:-file://$INSTALLER_DIR}"
+REPO_URL="${PITOOLS_REPO:-https://github.com/plabanauskis/pitools.git}"
 PITOOLS_HOME="${PITOOLS_HOME:-$HOME/.local/share/pitools}"
 BIN_DIR="${PITOOLS_BIN:-$HOME/.local/bin}"
 BRANCH="${PITOOLS_BRANCH:-main}"
@@ -133,8 +132,7 @@ Usage:
                   every platform-matching, deps-clean tool (skips are printed).
 
 Env: PITOOLS_HOME (prefix, default ~/.local/share/pitools),
-     PITOOLS_BIN (default ~/.local/bin), PITOOLS_REPO (default: this local
-     checkout), PITOOLS_BRANCH.
+     PITOOLS_BIN (default ~/.local/bin), PITOOLS_REPO, PITOOLS_BRANCH.
 EOF
 }
 

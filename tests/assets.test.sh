@@ -36,9 +36,9 @@ for tool in pichat pisession pibox; do
 done
 need_file README.md
 
-# Keep local-install, Pi state/session, exact-install, and isolation promises visible.
-need_text README.md 'This repository is local-only for now.'
-need_text README.md "PITOOLS_REPO=\"file://\$PWD\" bash install.sh"
+# Keep public/local install, Pi state/session, exact-install, and isolation promises visible.
+need_text README.md 'curl -fsSL https://raw.githubusercontent.com/plabanauskis/pitools/main/install.sh | bash'
+need_text README.md "PITOOLS_REPO=\"file://\$PWD\""
 need_text README.md 'fetches and prunes, then hard-resets'
 need_text README.md 'PI_CODING_AGENT_DIR'
 need_text README.md 'PI_CODING_AGENT_SESSION_DIR'

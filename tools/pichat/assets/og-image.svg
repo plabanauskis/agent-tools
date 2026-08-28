@@ -11,5 +11,5 @@
   <path d="M467.5 384H529.5" stroke="#6A9FCC" stroke-width="8" stroke-linecap="round"/>
   <text x="640" y="462" text-anchor="middle" font-family="DejaVu Sans" font-size="40" font-weight="600" fill="#F3F2F0">A throwaway Pi chat,</text>
   <text x="640" y="514" text-anchor="middle" font-family="DejaVu Sans" font-size="40" font-weight="600" fill="#F3F2F0">in one command.</text>
-  <text x="640" y="596" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="26" fill="#6A9FCC" opacity=".9">pitools · local-first Pi helpers</text>
+  <text x="640" y="596" text-anchor="middle" font-family="DejaVu Sans Mono" font-size="26" fill="#6A9FCC" opacity=".9">github.com/plabanauskis/pitools</text>
 </svg>

@@ -30,17 +30,23 @@ Three focused helpers for working with the [Pi coding agent](https://pi.dev) in 
 
 `pichat` and `pisession` are lightweight shell tools. `pibox` is deliberately heavier: it needs a locally built Docker image and Linux's sysbox runtime. Selecting one of the lightweight tools never installs or builds the box.
 
-## Local install
-
-This repository is local-only for now. From its checkout:
+## Install
 
 ```bash
-PITOOLS_REPO="file://$PWD" bash install.sh              # interactive picker
-PITOOLS_REPO="file://$PWD" bash install.sh --all        # every eligible tool
-PITOOLS_REPO="file://$PWD" bash install.sh --tools=pichat,pisession
+curl -fsSL https://raw.githubusercontent.com/plabanauskis/pitools/main/install.sh | bash
 ```
 
-The source directory must be a Git repository with a `main` branch because the installer creates a managed clone. `--force` creates links even when a platform requirement or dependency is missing.
+Prefer to inspect the installer first:
+
+```bash
+curl -fsSL -O https://raw.githubusercontent.com/plabanauskis/pitools/main/install.sh
+less install.sh
+bash install.sh                       # interactive picker
+bash install.sh --all                 # every eligible tool
+bash install.sh --tools=pichat,pisession
+```
+
+For development, install directly from a local checkout with `PITOOLS_REPO="file://$PWD"`. `--force` creates links even when a platform requirement or dependency is missing.
 
 ## What gets installed
 
@@ -49,7 +55,7 @@ No sudo, no `/usr` or `/etc` changes, and no host daemons. The installer writes 
 - `~/.local/share/pitools` — a Git clone of this repository. Override with `PITOOLS_HOME`.
 - `~/.local/bin` — the `pitools` link and one link per enabled command. Override with `PITOOLS_BIN`.
 
-Set `PITOOLS_REPO` to another local clone or future remote and `PITOOLS_BRANCH` to its branch. If the bin directory is not on `PATH`, the installer prints the exact export to add.
+Set `PITOOLS_REPO` to a mirror, fork, or local clone and `PITOOLS_BRANCH` to its branch. If the bin directory is not on `PATH`, the installer prints the exact export to add.
 
 Remove box runtime artifacts before removing the suite:
 
