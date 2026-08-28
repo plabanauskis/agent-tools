@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" fill="none" role="img" aria-label="pisession wordmark">
+  <title>pisession wordmark</title>
+  <rect x="44" y="46" width="60" height="16" rx="4" fill="#252F3D"/>
+  <rect x="44" y="70" width="64" height="16" rx="4" fill="#4B607C"/>
+  <rect x="44" y="94" width="48" height="16" rx="4" fill="#252F3D"/>
+  <path d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z M517.36 400 H634.72 V634.72 H517.36 Z" fill="#4B607C" fill-rule="evenodd" transform="translate(25 48) scale(.021) translate(-165.29 -165.29)" opacity=".45"/>
+  <path d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z M517.36 400 H634.72 V634.72 H517.36 Z" fill="#4B607C" fill-rule="evenodd" transform="translate(25 72) scale(.021) translate(-165.29 -165.29)" opacity=".72"/>
+  <path d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z M517.36 400 H634.72 V634.72 H517.36 Z" fill="#4B607C" fill-rule="evenodd" transform="translate(25 96) scale(.021) translate(-165.29 -165.29)"/>
+  <text x="144" y="80" dominant-baseline="central" font-family="DejaVu Sans" font-size="52" font-weight="700" fill="#252F3D">pisession</text>
+  <path d="M144 108H198" stroke="#4B607C" stroke-width="6" stroke-linecap="round"/>
+</svg>

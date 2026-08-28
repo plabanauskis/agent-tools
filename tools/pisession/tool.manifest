@@ -1,0 +1,8 @@
+# pisession — fzf picker to list and resume any Pi session.
+NAME=pisession
+ENTRYPOINT=pisession
+COMMANDS="pisession"
+DEPS="fzf jq pi"
+PLATFORM="linux macos"
+DESC="fzf picker to list and resume any Pi session"
+POST_ENABLE=""

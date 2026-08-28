@@ -1,0 +1,345 @@
+#!/usr/bin/env bash
+# pisession — list and resume Pi sessions from every working directory.
+#
+# No global set -e: malformed optional metadata and an empty fzf selection are
+# normal control flow. Each external boundary handles its own failure.
+
+AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+SESSIONS="${PI_CODING_AGENT_SESSION_DIR:-$AGENT_DIR/sessions}"
+
+WHEN_W=10
+DIR_W=38
+MODEL_W=20
+SUM_W=72
+DIM=$'\e[2m'
+RESET=$'\e[0m'
+SEP=$'\x1f'
+
+# Preserve an invokable path for fzf's preview process. An installed symlink
+# or command name is already suitable and avoids a dependency on readlink -f.
+if [[ "$0" == */* ]]; then
+  SELF="$0"
+else
+  SELF="$(command -v -- "$0" 2>/dev/null || printf '%s' "$0")"
+fi
+
+dir_status() { # <cwd> -> "live" | "gone"
+  if [ -n "$1" ] && [ -d "$1" ]; then
+    printf 'live'
+  else
+    printf 'gone'
+  fi
+}
+
+format_epoch() { # <epoch> <format>: GNU date on Linux, BSD date on macOS
+  local epoch="$1" format="$2"
+  case "$(uname -s)" in
+    Darwin) date -r "$epoch" "$format" ;;
+    *) date -d "@$epoch" "$format" ;;
+  esac
+}
+
+file_mtime() { # <path>: integer modification epoch on GNU/BSD stat
+  case "$(uname -s)" in
+    Darwin) stat -f %m "$1" ;;
+    *) stat -c %Y "$1" ;;
+  esac
+}
+
+relative_time() { # <epoch> [now]
+  local t="$1" now="${2:-$(date +%s)}" d
+  d=$((now - t))
+  ((d < 0)) && d=0
+  if ((d < 60)); then
+    printf 'just now'
+  elif ((d < 3600)); then
+    printf '%dm ago' "$((d / 60))"
+  elif ((d < 86400)); then
+    printf '%dh ago' "$((d / 3600))"
+  elif ((d < 172800)); then
+    printf 'yesterday'
+  elif ((d < 604800)); then
+    printf '%dd ago' "$((d / 86400))"
+  else
+    format_epoch "$t" '+%Y-%m-%d'
+  fi
+}
+
+fit() { # <text> <width>: truncate, then right-pad to the requested width
+  local text="$1" width="$2"
+  ((${#text} > width)) && text="${text:0:width}"
+  printf '%s%*s' "$text" "$((width - ${#text}))" ''
+}
+
+trunc() { # <text> <width>: truncate with a trailing ellipsis
+  local text="$1" width="$2"
+  if ((${#text} > width)); then
+    printf '%s…' "${text:0:width-1}"
+  else
+    printf '%s' "$text"
+  fi
+}
+
+dashes() { # <count>
+  local count="$1" out=''
+  while ((count-- > 0)); do
+    out="${out}─"
+  done
+  printf '%s' "$out"
+}
+
+shorten_dir() { # <path> [width=DIR_W]
+  local path="$1" width="${2:-$DIR_W}"
+  if [[ "$path" == "$HOME" ]]; then
+    path='~'
+  elif [[ "$path" == "$HOME"/* ]]; then
+    # shellcheck disable=SC2088 # literal ~ is display text, not expansion
+    path="~/${path#"$HOME"/}"
+  fi
+
+  if ((${#path} <= width)); then
+    printf '%s' "$path"
+    return
+  fi
+
+  local IFS=/ count
+  local -a parts
+  read -ra parts <<<"$path"
+  count=${#parts[@]}
+  if ((count >= 4)); then
+    path="${parts[0]}/…/${parts[count - 2]}/${parts[count - 1]}"
+  fi
+  if ((${#path} > width)); then
+    path="…${path: -$((width - 1))}"
+  fi
+  printf '%s' "$path"
+}
+
+model_label() { # <provider/model>
+  if [ -n "$1" ]; then
+    printf '%s' "$1"
+  else
+    printf '—'
+  fi
+}
+
+normalize_summary() { # <text>: one printable delimiter-safe line
+  local text="$1"
+  text="${text//$SEP/ }"
+  text="${text//$'\t'/ }"
+  text="${text//$'\r'/ }"
+  text="${text//$'\n'/ }"
+  printf '%s' "$text" | sed 's/[[:space:]][[:space:]]*/ /g; s/^ //; s/ $//'
+}
+
+session_meta() { # <session> -> id<SEP>cwd<SEP>model<SEP>version
+  local session="$1"
+  jq -rs --arg sep "$SEP" '
+    first(.[] | select(.type == "session")) as $header
+    | if $header == null then empty else
+        ([ .[]
+          | if .type == "model_change" then
+              [(.provider // ""), (.modelId // "")] | map(select(type == "string")) | join("/")
+            elif .type == "message" and .message.role == "assistant" then
+              [(.message.provider // ""), (.message.model // "")] | map(select(type == "string")) | join("/")
+            else empty
+            end
+          | select(type == "string" and length > 1)
+        ] | last // "") as $model
+        | [
+            (($header.id // "") | if type == "string" then . else "" end),
+            (($header.cwd // "") | if type == "string" then . else "" end),
+            $model,
+            (($header.version // 1) | tostring)
+          ]
+        | map(gsub("[\t\n\u001f]"; " "))
+        | join($sep)
+      end
+  ' "$session" 2>/dev/null
+}
+
+is_pi_session() { # <session>: valid Pi header with UUID and cwd
+  local session="$1" id cwd model version
+  IFS=$SEP read -r id cwd model version < <(session_meta "$session")
+  [[ "$id" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]] &&
+    [ -n "$cwd" ] && [[ "$version" =~ ^[0-9]+$ ]]
+}
+
+session_summary() { # <session> <id>: latest name, first user text, then ID
+  local session="$1" id="$2" summary
+  summary="$(jq -rs '
+    ([ .[]
+      | select(.type == "session_info")
+      | .name
+      | select(type == "string" and length > 0)
+    ] | last // "") as $name
+    | if $name != "" then $name else
+        ([ .[]
+          | select(.type == "message" and .message.role == "user")
+          | .message.content
+          | if type == "string" then .
+            elif type == "array" then
+              [ .[] | select(.type == "text") | .text | select(type == "string") ] | join(" ")
+            else ""
+            end
+          | select(length > 0)
+        ] | first // "")
+      end
+  ' "$session" 2>/dev/null)"
+  summary="$(normalize_summary "$summary")"
+  if [ -n "$summary" ]; then
+    printf '%s' "$summary"
+  else
+    printf '%s' "$id"
+  fi
+}
+
+extract_session() { # <session> -> cwd<SEP>model<SEP>summary<SEP>id<SEP>version
+  local session="$1" id cwd model version summary
+  IFS=$SEP read -r id cwd model version < <(session_meta "$session")
+  summary="$(session_summary "$session" "$id")"
+  printf '%s%s%s%s%s%s%s%s%s\n' \
+    "$cwd" "$SEP" "$model" "$SEP" "$summary" "$SEP" "$id" "$SEP" "$version"
+}
+
+build_row() { # <session> <mtime_epoch> <now>
+  local session="$1" mtime="$2" now="$3"
+  local cwd model summary id version status glyph
+  local whenf dirf modelf summaryf row
+  IFS=$SEP read -r cwd model summary id version < <(extract_session "$session")
+  status="$(dir_status "$cwd")"
+  if [ "$status" = live ]; then glyph='●'; else glyph='✗'; fi
+  whenf="$(fit "$(relative_time "$mtime" "$now")" "$WHEN_W")"
+  dirf="$(fit "$(shorten_dir "$cwd")" "$DIR_W")"
+  modelf="$(fit "$(model_label "$model")" "$MODEL_W")"
+  summaryf="$(trunc "$summary" "$SUM_W")"
+  row="  ${glyph}  ${whenf}  ${dirf}  ${modelf}  ${summaryf}"
+  [ "$status" = gone ] && row="${DIM}${row}${RESET}"
+  printf '%s\t%s\n' "$row" "$session"
+}
+
+build_list() { # <now>: recursively discover valid Pi sessions newest first
+  local now="$1" mtime session
+  find "$SESSIONS" -type f -name '*.jsonl' -print 2>/dev/null |
+    while IFS= read -r session; do
+      mtime="$(file_mtime "$session" 2>/dev/null)" || continue
+      printf '%s\t%s\n' "$mtime" "$session"
+    done |
+    sort -rn |
+    while IFS=$'\t' read -r mtime session; do
+      if is_pi_session "$session"; then
+        build_row "$session" "${mtime%.*}" "$now"
+      fi
+    done
+}
+
+make_header() { # <count>
+  local count="$1" hint columns rule
+  hint="  pisession · ${count} sessions · ↑↓ select · / filter · ⏎ resume"
+  columns="  ●  $(fit 'WHEN' "$WHEN_W")  $(fit 'DIRECTORY' "$DIR_W")  $(fit 'MODEL' "$MODEL_W")  SUMMARY"
+  rule="  ─  $(dashes "$WHEN_W")  $(dashes "$DIR_W")  $(dashes "$MODEL_W")  $(dashes 30)"
+  printf '%s\n\n%s\n%s' "$hint" "$columns" "$rule"
+}
+
+render_preview() { # <session>: boxed session card
+  local session="$1" cwd model summary id version
+  local mtime status glyph status_text active
+  local preview_width=46 border_width line
+  IFS=$SEP read -r cwd model summary id version < <(extract_session "$session")
+  mtime="$(file_mtime "$session" 2>/dev/null)"
+  status="$(dir_status "$cwd")"
+  if [ "$status" = live ]; then
+    glyph='●'
+    status_text='live'
+  else
+    glyph='✗'
+    status_text='directory gone'
+  fi
+  active="$(format_epoch "$mtime" '+%Y-%m-%d %H:%M') · $(relative_time "$mtime")"
+  border_width=$((preview_width + 2))
+
+  preview_line() { printf '│ %s │\n' "$(fit "$1" "$preview_width")"; }
+
+  printf '┌─ session %s┐\n' "$(dashes "$((border_width - 10))")"
+  preview_line "${glyph} ${status_text}"
+  preview_line ''
+  preview_line "dir      $(shorten_dir "$cwd" "$((preview_width - 9))")"
+  preview_line "model    $(model_label "$model")"
+  preview_line "format   v$version"
+  preview_line "active   $active"
+  preview_line "id       $id"
+  printf '├%s┤\n' "$(dashes "$border_width")"
+  while IFS= read -r line; do
+    preview_line "$line"
+  done < <(printf '%s\n' "$summary" | fold -s -w "$preview_width")
+  printf '└%s┘\n' "$(dashes "$border_width")"
+
+  unset -f preview_line
+}
+
+usage() {
+  cat <<'EOF'
+pisession — list and resume Pi sessions
+
+Usage:
+  pisession            open the session picker
+  pisession --help     show this help
+
+In the picker: type to filter, ↑/↓ to move, Enter to resume the highlighted
+session from its original directory with `pi --session <file>`. Sessions whose
+directory no longer exists are shown with ✗ and cannot be resumed.
+EOF
+}
+
+launch() { # <session>
+  local session="$1" cwd model summary id version
+  IFS=$SEP read -r cwd model summary id version < <(extract_session "$session")
+  if [ -d "$cwd" ]; then
+    cd "$cwd" || {
+      printf 'cannot cd into: %s\n' "$cwd" >&2
+      exit 1
+    }
+    exec pi --session "$session"
+  fi
+  printf 'directory no longer exists, cannot resume: %s\n' "$cwd" >&2
+  exit 1
+}
+
+main() {
+  case "${1:-}" in
+    --preview)
+      render_preview "$2"
+      return 0
+      ;;
+    -h | --help)
+      usage
+      return 0
+      ;;
+  esac
+
+  local now list count header selected
+  now="$(date +%s)"
+  list="$(build_list "$now")"
+  if [ -z "$list" ]; then
+    printf 'no Pi sessions found under %s\n' "$SESSIONS" >&2
+    return 1
+  fi
+  count="$(printf '%s\n' "$list" | grep -c '')"
+  header="$(make_header "$count")"
+  selected="$(printf '%s\n' "$list" | fzf \
+    --ansi \
+    --delimiter=$'\t' \
+    --with-nth=1 \
+    --layout=reverse \
+    --header-first \
+    --header="$header" \
+    --preview="$SELF --preview {2}" \
+    --preview-window='right,52,wrap')"
+
+  [ -z "$selected" ] && return 0
+  launch "${selected##*$'\t'}"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

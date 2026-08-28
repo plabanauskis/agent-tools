@@ -1,0 +1,449 @@
+#!/usr/bin/env bash
+
+PIBOX_VERSION="1.0.0"
+IMAGE="${PIBOX_IMAGE:-pibox:latest}"
+PI_AGENT_DIR="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+PI_SESSION_DIR="${PI_CODING_AGENT_SESSION_DIR:-}"
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+DEFAULT_PORTS="3000-3010"
+CACHE_VOLUMES=(pibox-npm pibox-cargo pibox-go pibox-uv pibox-nuget)
+SEP=$'\x1f'
+DOCKER_ARGS=()
+TINT="${PIBOX_TINT:-#172334}"
+
+# Explicit allowlist: pibox forwards only known provider/network credentials,
+# never the complete host environment or credential directories.
+PI_AUTH_ENV_VARS=(
+  ANTHROPIC_AUTH_TOKEN ANTHROPIC_API_KEY ANTHROPIC_OAUTH_TOKEN ANT_LING_API_KEY
+  OPENAI_API_KEY AZURE_OPENAI_API_KEY AZURE_OPENAI_BASE_URL AZURE_OPENAI_RESOURCE_NAME
+  AZURE_OPENAI_API_VERSION AZURE_OPENAI_DEPLOYMENT_NAME_MAP DEEPSEEK_API_KEY NVIDIA_API_KEY
+  GEMINI_API_KEY GROQ_API_KEY CEREBRAS_API_KEY XAI_API_KEY FIREWORKS_API_KEY
+  TOGETHER_API_KEY BASETEN_API_KEY OPENROUTER_API_KEY AI_GATEWAY_API_KEY ZAI_API_KEY
+  ZAI_CODING_CN_API_KEY MISTRAL_API_KEY MINIMAX_API_KEY MINIMAX_CN_API_KEY
+  MOONSHOT_API_KEY OPENCODE_API_KEY KIMI_API_KEY CLOUDFLARE_API_KEY
+  CLOUDFLARE_ACCOUNT_ID CLOUDFLARE_GATEWAY_ID QWEN_TOKEN_PLAN_API_KEY
+  QWEN_TOKEN_PLAN_CN_API_KEY XIAOMI_API_KEY XIAOMI_TOKEN_PLAN_CN_API_KEY
+  XIAOMI_TOKEN_PLAN_AMS_API_KEY XIAOMI_TOKEN_PLAN_SGP_API_KEY RADIUS_API_KEY
+  HF_TOKEN HUGGINGFACE_HUB_TOKEN LLAMA_API_KEY LLAMA_BASE_URL
+  AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_SESSION_TOKEN AWS_BEARER_TOKEN_BEDROCK
+  AWS_REGION AWS_DEFAULT_REGION HTTP_PROXY HTTPS_PROXY NO_PROXY
+)
+
+pibox_usage() {
+  cat <<EOF
+pibox $PIBOX_VERSION — sandboxed autonomous Pi
+
+Usage:
+  pibox [pi args...]   Launch the sandbox in the current dir
+  pibox build          Build/rebuild the image ($IMAGE) for your user
+  pibox doctor         Check prerequisites and configuration
+  pibox uninstall      Remove image + caches; prompt before data
+  pibox help           Show this help
+
+The first word decides: one of {build, doctor, uninstall, help, version} runs that
+command; anything else is passed unchanged to Pi inside the sandbox.
+
+The box runs as your host user, mounts the project and Pi agent state read-write
+at their real paths, and mounts the exact host Pi installation read-only. Pi
+already runs tools with all permissions; Docker with sysbox-runc is the external
+security boundary.
+
+Env: PIBOX_IMAGE, PIBOX_PORTS, PIBOX_NO_DOCKER, PIBOX_SHARE_DIR,
+     PI_CODING_AGENT_DIR, PI_CODING_AGENT_SESSION_DIR,
+     PIBOX_TINT, PIBOX_NO_TINT=1, and supported Pi provider credentials
+EOF
+}
+
+find_share_dir() {
+  local directory
+  for directory in "${PIBOX_SHARE_DIR:-/usr/share/pibox}" "$SCRIPT_DIR/.." "$SCRIPT_DIR/../share/pibox"; do
+    if [ -f "$directory/Dockerfile" ]; then
+      (cd "$directory" && pwd)
+      return 0
+    fi
+  done
+  return 1
+}
+
+verify_pi_package() { # <package.json>
+  node -e '
+const fs = require("node:fs");
+try {
+  const packageJson = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+  process.exit(packageJson.name === "@earendil-works/pi-coding-agent" ? 0 : 1);
+} catch {
+  process.exit(1);
+}
+' "$1" 2>/dev/null
+}
+
+resolve_pi_install() { # [candidate] -> kind<SEP>executable<SEP>mount-source
+  local candidate="${1:-}" executable package_root
+
+  if [ -z "$candidate" ]; then
+    candidate="$(command -v pi 2>/dev/null || true)"
+  fi
+  if [ -z "$candidate" ]; then
+    echo "pibox: host 'pi' not found on PATH. Install Pi first." >&2
+    return 1
+  fi
+
+  executable="$(readlink -f "$candidate" 2>/dev/null || true)"
+  if [ -z "$executable" ] || [ ! -f "$executable" ] || [ ! -x "$executable" ]; then
+    echo "pibox: host Pi candidate '$candidate' is not an executable regular file." >&2
+    return 1
+  fi
+
+  case "$executable" in
+    */@earendil-works/pi-coding-agent/dist/bundle/cli.js)
+      package_root="${executable%/dist/bundle/cli.js}"
+      if ! verify_pi_package "$package_root/package.json"; then
+        echo "pibox: '$executable' matches the npm path, but package.json is not @earendil-works/pi-coding-agent." >&2
+        return 1
+      fi
+      printf 'npm%s%s%s%s\n' "$SEP" "$executable" "$SEP" "$package_root"
+      return 0
+      ;;
+  esac
+
+  # Pi's compiled build places a native `pi` and its runtime assets together.
+  # Validate the adjacent package metadata and mount the whole asset directory.
+  package_root="$(dirname "$executable")"
+  if [ "$(basename "$executable")" = pi ] &&
+    [ "$(head -c 2 "$executable" 2>/dev/null || true)" != '#!' ] &&
+    verify_pi_package "$package_root/package.json"; then
+    printf 'binary%s%s%s%s\n' "$SEP" "$executable" "$SEP" "$package_root"
+    return 0
+  fi
+
+  echo "pibox: unsupported Pi installation layout at '$executable'." >&2
+  echo "pibox: supported layouts are the @earendil-works/pi-coding-agent npm package" >&2
+  echo "pibox: (dist/bundle/cli.js) and an official compiled Pi directory." >&2
+  return 1
+}
+
+pibox_build() {
+  local share
+  share="$(find_share_dir)" || {
+    echo "pibox: cannot find Dockerfile (set PIBOX_SHARE_DIR to its directory)." >&2
+    return 1
+  }
+  echo "pibox: building $IMAGE from $share (user=$(id -un) UID=$(id -u) GID=$(id -g) home=$HOME)..."
+  docker build \
+    --build-arg UID="$(id -u)" --build-arg GID="$(id -g)" \
+    --build-arg USERNAME="$(id -un)" --build-arg USER_HOME="$HOME" \
+    -t "$IMAGE" "$share"
+}
+
+doctor_result() {
+  local label="$1" status="$2" message="$3"
+  if [ "$status" -eq 0 ]; then
+    printf '  %-12s ok\n' "$label"
+  else
+    printf '  %-12s MISSING — %s\n' "$label" "$message"
+  fi
+}
+
+has_pi_auth() {
+  local variable
+  if [ -s "$PI_AGENT_DIR/auth.json" ] && grep -Eq '"[^"[:space:]]+"[[:space:]]*:' "$PI_AGENT_DIR/auth.json"; then
+    return 0
+  fi
+  for variable in "${PI_AUTH_ENV_VARS[@]}"; do
+    [ -n "${!variable:-}" ] && return 0
+  done
+  return 1
+}
+
+pibox_doctor() {
+  local fail=0 install="" kind="" pi_exec="" mount_source=""
+
+  echo "pibox doctor ($PIBOX_VERSION):"
+
+  if command -v docker >/dev/null 2>&1; then
+    doctor_result docker 0 ""
+  else
+    doctor_result docker 1 "install Docker"
+    fail=1
+  fi
+
+  if docker info -f '{{.Runtimes}}' 2>/dev/null | grep -q sysbox-runc; then
+    doctor_result sysbox 0 ""
+  else
+    doctor_result sysbox 1 "install sysbox-ce"
+    fail=1
+  fi
+
+  if install="$(resolve_pi_install "" 2>/dev/null)"; then
+    IFS="$SEP" read -r kind pi_exec mount_source <<<"$install"
+    doctor_result pi 0 ""
+  else
+    doctor_result pi 1 "install the supported @earendil-works Pi package or compiled release"
+    fail=1
+  fi
+
+  if [ -d "$PI_AGENT_DIR" ]; then
+    doctor_result state 0 ""
+  else
+    doctor_result state 1 "create $PI_AGENT_DIR by running pi on the host"
+    fail=1
+  fi
+
+  if [ -n "$PI_SESSION_DIR" ] && [ ! -d "$PI_SESSION_DIR" ]; then
+    doctor_result sessions 1 "create the PI_CODING_AGENT_SESSION_DIR directory"
+    fail=1
+  elif [ -n "$PI_SESSION_DIR" ]; then
+    doctor_result sessions 0 ""
+  fi
+
+  if has_pi_auth; then
+    doctor_result auth 0 ""
+  else
+    doctor_result auth 1 "use /login on the host or export a supported provider credential"
+    fail=1
+  fi
+
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    doctor_result image 0 ""
+  else
+    doctor_result image 1 "run 'pibox build'"
+    fail=1
+  fi
+
+  if [ "$fail" -eq 0 ]; then
+    echo "All good."
+  else
+    echo "Some items need attention (see above)."
+  fi
+  return "$fail"
+}
+
+pibox_uninstall() {
+  local volume answer
+  local data=()
+
+  echo "pibox uninstall — removes runtime artifacts (not the installed program files)."
+  echo
+
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    if docker rmi "$IMAGE" >/dev/null 2>&1; then
+      echo "removed image $IMAGE"
+    else
+      echo "  (could not remove $IMAGE — is a container still using it?)"
+    fi
+  fi
+
+  for volume in "${CACHE_VOLUMES[@]}"; do
+    if docker volume inspect "$volume" >/dev/null 2>&1 &&
+      docker volume rm "$volume" >/dev/null 2>&1; then
+      echo "removed cache volume $volume"
+    fi
+  done
+
+  mapfile -t data < <(docker volume ls -q --filter name='^pibox-docker-' 2>/dev/null || true)
+  if [ "${#data[@]}" -gt 0 ]; then
+    echo
+    echo "Per-project DATA volumes (your databases):"
+    printf '  %s\n' "${data[@]}"
+    printf 'Delete these %d data volume(s)? This destroys their data. [y/N] ' "${#data[@]}"
+    read -r answer </dev/tty 2>/dev/null || answer=n
+    case "$answer" in
+      y | Y)
+        for volume in "${data[@]}"; do
+          if docker volume rm "$volume" >/dev/null 2>&1; then
+            echo "removed $volume"
+          fi
+        done
+        ;;
+      *) echo "kept data volumes." ;;
+    esac
+  fi
+
+  echo
+  echo "Runtime teardown done. To remove the pibox command from pitools:"
+  echo "  pitools disable pibox"
+}
+
+append_provider_env() {
+  local variable
+  for variable in "${PI_AUTH_ENV_VARS[@]}"; do
+    if [ -n "${!variable:-}" ]; then
+      DOCKER_ARGS+=(-e "$variable=${!variable}")
+    fi
+  done
+}
+
+build_docker_args() { # <repo-root> <kind> <pi-exec> <mount-source>
+  local repo_root="$1" kind="$2" pi_exec="$3" mount_source="$4"
+  local project port
+  local ports=("$DEFAULT_PORTS")
+  local extra_ports=()
+
+  case "$kind" in
+    npm | binary)
+      case "$pi_exec" in
+        "$mount_source"/*) ;;
+        *)
+          echo "pibox: Pi executable is outside its installation mount." >&2
+          return 1
+          ;;
+      esac
+      ;;
+    *)
+      echo "pibox: unknown Pi installation kind '$kind'." >&2
+      return 1
+      ;;
+  esac
+
+  if [ -n "${PIBOX_PORTS:-}" ]; then
+    read -r -a extra_ports <<<"$PIBOX_PORTS"
+    ports+=("${extra_ports[@]}")
+  fi
+  if [ -f "$repo_root/.pibox/ports" ]; then
+    while IFS= read -r port; do
+      [ -n "$port" ] && ports+=("$port")
+    done <"$repo_root/.pibox/ports"
+  fi
+
+  project="$(printf '%s' "$(basename "$repo_root")" | tr -c 'A-Za-z0-9_.-' '_')"
+  DOCKER_ARGS=(docker run -it --rm
+    --runtime=sysbox-runc
+    -e "HOME=$HOME"
+    -e "TERM=${TERM:-xterm-256color}"
+    -e "PIBOX=1"
+    -e "PIBOX_VERSION=$PIBOX_VERSION"
+    -e "PI_CODING_AGENT_DIR=$PI_AGENT_DIR"
+    -e "PI_SKIP_VERSION_CHECK=1"
+    -v "$repo_root:$repo_root" -w "$repo_root"
+    -v "$PI_AGENT_DIR:$PI_AGENT_DIR"
+    -v "$mount_source:$mount_source:ro"
+    -v "pibox-docker-$project:/var/lib/docker")
+
+  if [ -n "$PI_SESSION_DIR" ]; then
+    DOCKER_ARGS+=(-e "PI_CODING_AGENT_SESSION_DIR=$PI_SESSION_DIR")
+    case "$PI_SESSION_DIR" in
+      "$PI_AGENT_DIR" | "$PI_AGENT_DIR"/*) ;;
+      *) DOCKER_ARGS+=(-v "$PI_SESSION_DIR:$PI_SESSION_DIR") ;;
+    esac
+  fi
+  if [ -f "$HOME/.gitconfig" ]; then
+    DOCKER_ARGS+=(-v "$HOME/.gitconfig:$HOME/.gitconfig:ro")
+  fi
+  for port in "${ports[@]}"; do
+    DOCKER_ARGS+=(-p "$port:$port")
+  done
+  append_provider_env
+  if [ -n "${PIBOX_NO_DOCKER:-}" ]; then
+    DOCKER_ARGS+=(-e "PIBOX_NO_DOCKER=$PIBOX_NO_DOCKER")
+  fi
+
+  DOCKER_ARGS+=(-v "pibox-npm:$HOME/.npm"
+    -v "pibox-cargo:$HOME/.cargo/registry"
+    -v "pibox-go:$HOME/go/pkg"
+    -v "pibox-uv:$HOME/.cache/uv"
+    -v "pibox-nuget:$HOME/.nuget/packages")
+}
+
+emit_osc() {
+  if [ -w /dev/tty ]; then
+    printf '%b' "$1" >/dev/tty 2>/dev/null
+  fi
+  return 0
+}
+
+set_tint() {
+  [ "${PIBOX_NO_TINT:-0}" = "1" ] || emit_osc "\033]11;${TINT}\007"
+}
+
+clear_tint() {
+  [ "${PIBOX_NO_TINT:-0}" = "1" ] || emit_osc "\033]111\007"
+}
+
+main() {
+  local repo_root answer install kind pi_exec mount_source
+
+  case "${1:-}" in
+    build)
+      shift
+      pibox_build "$@"
+      return
+      ;;
+    doctor)
+      shift
+      pibox_doctor "$@"
+      return
+      ;;
+    uninstall)
+      shift
+      pibox_uninstall "$@"
+      return
+      ;;
+    help)
+      pibox_usage
+      return 0
+      ;;
+    version)
+      echo "pibox $PIBOX_VERSION"
+      return 0
+      ;;
+  esac
+
+  if repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+    :
+  else
+    repo_root="$(pwd -P)"
+    echo "pibox: '$repo_root' is not a git repository." >&2
+    echo "pibox: Pi runs tools autonomously with all permissions; without git history" >&2
+    echo "pibox: its edits and deletions have NO undo. The directory is writable." >&2
+    printf 'Continue anyway? [y/N] ' >&2
+    read -r answer </dev/tty 2>/dev/null || answer=n
+    case "$answer" in
+      y | Y) ;;
+      *)
+        echo "pibox: aborted." >&2
+        return 1
+        ;;
+    esac
+  fi
+
+  if ! docker info -f '{{.Runtimes}}' 2>/dev/null | grep -q sysbox-runc; then
+    echo "pibox: sysbox runtime not found. Install sysbox-ce." >&2
+    return 1
+  fi
+
+  install="$(resolve_pi_install "")" || return 1
+  IFS="$SEP" read -r kind pi_exec mount_source <<<"$install"
+
+  if [ ! -d "$PI_AGENT_DIR" ]; then
+    echo "pibox: Pi agent directory '$PI_AGENT_DIR' does not exist." >&2
+    echo "pibox: run 'pi' on the host first or set PI_CODING_AGENT_DIR." >&2
+    return 1
+  fi
+  if [ -n "$PI_SESSION_DIR" ] && [ ! -d "$PI_SESSION_DIR" ]; then
+    echo "pibox: Pi session directory '$PI_SESSION_DIR' does not exist." >&2
+    echo "pibox: create it before launching pibox." >&2
+    return 1
+  fi
+
+  if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    echo "pibox: image '$IMAGE' not found." >&2
+    printf 'Build it now? (~5 min, ~5GB) [y/N] ' >&2
+    read -r answer </dev/tty 2>/dev/null || answer=n
+    case "$answer" in
+      y | Y) pibox_build || return 1 ;;
+      *)
+        echo "pibox: run 'pibox build' first." >&2
+        return 1
+        ;;
+    esac
+  fi
+
+  build_docker_args "$repo_root" "$kind" "$pi_exec" "$mount_source" || return 1
+  set_tint
+  trap clear_tint EXIT INT TERM
+  "${DOCKER_ARGS[@]}" "$IMAGE" "$pi_exec" "$@"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+  main "$@"
+fi

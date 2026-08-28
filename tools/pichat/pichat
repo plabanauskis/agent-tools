@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# pichat — open Pi in a fresh, ephemeral temp dir for a throwaway chat.
+# The temp directory is intentionally retained so pisession can resume it.
+set -euo pipefail
+
+case "${1:-}" in
+  -h | --help)
+    cat <<'EOF'
+pichat — open Pi in a fresh ephemeral temp dir for a throwaway chat.
+
+Usage:
+  pichat [pi args...]   Make a new temp dir, cd into it, and exec 'pi'.
+  pichat --help        Show this help.
+
+The temp dir is created under $TMPDIR (default /tmp) and retained so
+pisession can resume the session later. All arguments are passed unchanged
+to 'pi'.
+EOF
+    exit 0
+    ;;
+esac
+
+dir="$(mktemp -d "${TMPDIR:-/tmp}/pichat.XXXXXX")"
+cd "$dir"
+exec pi "$@"
