@@ -1,3 +1,11 @@
+<p>
+  <a href="tools/cochat/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="tools/cochat/assets/icon-dark.svg"><img src="tools/cochat/assets/icon.svg" alt="cochat" height="56"></picture></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="tools/cosession/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="tools/cosession/assets/icon-dark.svg"><img src="tools/cosession/assets/icon.svg" alt="cosession" height="56"></picture></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="tools/cobox/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="tools/cobox/assets/icon-dark.svg"><img src="tools/cobox/assets/icon.svg" alt="cobox" height="56"></picture></a>
+</p>
+
 # cotools
 
 Three focused Codex terminal helpers, now maintained in the
@@ -6,9 +14,9 @@ Codex-specific session and container behavior.
 
 | Tool | Purpose | Dependencies | Platform |
 | --- | --- | --- | --- |
-| [cochat](tools/cochat/README.md) | Throwaway chat in a fresh temporary directory | `codex` | Linux, macOS |
-| [cosession](tools/cosession/README.md) | fzf session picker and resume | `fzf`, `jq`, `codex` | Linux, macOS |
-| [cobox](tools/cobox/README.md) | Autonomous Codex in Docker + sysbox | `docker`, `sysbox-runc`, `codex` | Linux amd64 |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cochat/assets/icon-dark.svg"><img src="tools/cochat/assets/icon.svg" alt="" width="20" height="20"></picture> [cochat](tools/cochat/README.md) | Throwaway chat in a fresh temporary directory | `codex` | Linux, macOS |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cosession/assets/icon-dark.svg"><img src="tools/cosession/assets/icon.svg" alt="" width="20" height="20"></picture> [cosession](tools/cosession/README.md) | fzf session picker and resume | `fzf`, `jq`, `codex` | Linux, macOS |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cobox/assets/icon-dark.svg"><img src="tools/cobox/assets/icon.svg" alt="" width="20" height="20"></picture> [cobox](tools/cobox/README.md) | Autonomous Codex in Docker + sysbox | `docker`, `sysbox-runc`, `codex` | Linux amd64 |
 
 ## Install
 

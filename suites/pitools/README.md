@@ -1,3 +1,11 @@
+<p>
+  <a href="tools/pichat/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="tools/pichat/assets/icon-dark.svg"><img src="tools/pichat/assets/icon.svg" alt="pichat" height="56"></picture></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="tools/pisession/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="tools/pisession/assets/icon-dark.svg"><img src="tools/pisession/assets/icon.svg" alt="pisession" height="56"></picture></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="tools/pibox/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="tools/pibox/assets/icon-dark.svg"><img src="tools/pibox/assets/icon.svg" alt="pibox" height="56"></picture></a>
+</p>
+
 # pitools
 
 Three focused Pi terminal helpers, now maintained in the
@@ -6,9 +14,9 @@ Pi-specific session and container behavior.
 
 | Tool | Purpose | Dependencies | Platform |
 | --- | --- | --- | --- |
-| [pichat](tools/pichat/README.md) | Throwaway chat in a fresh temporary directory | `pi` | Linux, macOS |
-| [pisession](tools/pisession/README.md) | fzf session picker and resume | `fzf`, `jq`, `pi` | Linux, macOS |
-| [pibox](tools/pibox/README.md) | Pi in Docker + sysbox | `docker`, `sysbox-runc`, `pi` | Linux amd64 |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/pichat/assets/icon-dark.svg"><img src="tools/pichat/assets/icon.svg" alt="" width="20" height="20"></picture> [pichat](tools/pichat/README.md) | Throwaway chat in a fresh temporary directory | `pi` | Linux, macOS |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/pisession/assets/icon-dark.svg"><img src="tools/pisession/assets/icon.svg" alt="" width="20" height="20"></picture> [pisession](tools/pisession/README.md) | fzf session picker and resume | `fzf`, `jq`, `pi` | Linux, macOS |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/pibox/assets/icon-dark.svg"><img src="tools/pibox/assets/icon.svg" alt="" width="20" height="20"></picture> [pibox](tools/pibox/README.md) | Pi in Docker + sysbox | `docker`, `sysbox-runc`, `pi` | Linux amd64 |
 
 ## Install
 

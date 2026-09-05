@@ -1,3 +1,11 @@
+<p>
+  <a href="tools/cchat/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="tools/cchat/assets/icon-dark.svg"><img src="tools/cchat/assets/icon.svg" alt="cchat" height="56"></picture></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="tools/ccsession/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="tools/ccsession/assets/icon-dark.svg"><img src="tools/ccsession/assets/icon.svg" alt="ccsession" height="56"></picture></a>
+  &nbsp;&nbsp;&nbsp;
+  <a href="tools/ccbox/README.md"><picture><source media="(prefers-color-scheme: dark)" srcset="tools/ccbox/assets/icon-dark.svg"><img src="tools/ccbox/assets/icon.svg" alt="ccbox" height="56"></picture></a>
+</p>
+
 # cctools
 
 Three small Claude Code terminal helpers, now maintained in the
@@ -6,9 +14,9 @@ Claude-specific session and container behavior.
 
 | Tool | Purpose | Dependencies | Platform |
 | --- | --- | --- | --- |
-| [cchat](tools/cchat/README.md) | Throwaway chat in a fresh temporary directory | `claude` | Linux, macOS |
-| [ccsession](tools/ccsession/README.md) | fzf session picker and resume | `fzf`, `jq`, `claude` | Linux, macOS |
-| [ccbox](tools/ccbox/README.md) | Autonomous Claude Code in Docker + sysbox | `docker`, `sysbox-runc`, `claude` | Linux amd64 |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cchat/assets/icon-dark.svg"><img src="tools/cchat/assets/icon.svg" alt="" width="20" height="20"></picture> [cchat](tools/cchat/README.md) | Throwaway chat in a fresh temporary directory | `claude` | Linux, macOS |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/ccsession/assets/icon-dark.svg"><img src="tools/ccsession/assets/icon.svg" alt="" width="20" height="20"></picture> [ccsession](tools/ccsession/README.md) | fzf session picker and resume | `fzf`, `jq`, `claude` | Linux, macOS |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/ccbox/assets/icon-dark.svg"><img src="tools/ccbox/assets/icon.svg" alt="" width="20" height="20"></picture> [ccbox](tools/ccbox/README.md) | Autonomous Claude Code in Docker + sysbox | `docker`, `sysbox-runc`, `claude` | Linux amd64 |
 
 ## Install
 
