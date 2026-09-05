@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="16 24 112 112" fill="none" role="img" aria-label="ccbox">
+  <title>ccbox</title>
+  <polygon points="72,40 108,58 72,76 36,58" fill="#D97757"/>
+  <polygon points="36,58 72,76 72,120 36,102" fill="#16181D"/>
+  <polygon points="72,76 108,58 108,102 72,120" fill="#16181D" fill-opacity="0.6"/>
+  <polyline points="-6,-9 5,0 -6,9" transform="translate(54,90) skewY(26.57)" stroke="#D97757" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

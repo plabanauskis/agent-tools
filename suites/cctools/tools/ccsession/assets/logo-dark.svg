@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="480" height="160" viewBox="0 0 480 160" fill="none" role="img" aria-label="ccsession">
+  <title>ccsession</title>
+  <rect x="44" y="46" width="60" height="16" rx="4" fill="#F4F1EA"/>
+  <rect x="44" y="70" width="64" height="16" rx="4" fill="#D97757"/>
+  <rect x="44" y="94" width="48" height="16" rx="4" fill="#F4F1EA"/>
+  <polyline points="-6,-8 6,0 -6,8" transform="translate(32,78)" stroke="#D97757" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="144" y="80" dominant-baseline="central" font-family="ui-monospace,'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="60" font-weight="700" letter-spacing="-1"><tspan fill="#D97757">cc</tspan><tspan fill="#F4F1EA">session</tspan></text>
+</svg>

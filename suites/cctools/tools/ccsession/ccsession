@@ -1,0 +1,276 @@
+#!/usr/bin/env bash
+# ccsession — list and resume Claude Code sessions.
+#
+# Lists every session under ~/.claude/projects in an fzf picker (newest-active
+# first) and, on Enter, cd's into the chosen session's original directory and
+# exec's `claude --resume <id>` there.
+#
+# No `set -e`/`set -u`: `grep -m1` legitimately exits 1 on no-match (e.g. a
+# /tmp session has no gitBranch); a global set -e would abort on that normal
+# flow. Errors are handled explicitly instead.
+
+PROJECTS="$HOME/.claude/projects"
+WHEN_W=10    # relative-time column width
+DIR_W=38     # directory column width (after ~-shortening + elision)
+BRANCH_W=8   # branch column width
+SUM_W=72     # summary truncation width
+DIM=$'\e[2m' # ANSI dim
+RESET=$'\e[0m'
+SEP=$'\x1f' # internal field separator for extract_session output. A
+# non-whitespace control char: unlike TAB (an IFS-whitespace
+# char), `IFS=$SEP read` preserves empty fields, so a missing
+# branch does not let the summary collapse into its column.
+
+# Resolve how to re-invoke ourselves for fzf's --preview. When installed as a
+# PATH symlink, $0 is the bare name "ccsession"; when run as ./ccsession it has
+# a slash. Resolve to an absolute, invokable path either way.
+if [[ "$0" == */* ]]; then
+  SELF="$(realpath -- "$0" 2>/dev/null || printf '%s' "$0")"
+else
+  SELF="$(command -v -- "$0" 2>/dev/null || printf '%s' "$0")"
+fi
+
+dir_status() { # <cwd> -> "live" | "gone"
+  if [ -n "$1" ] && [ -d "$1" ]; then printf 'live'; else printf 'gone'; fi
+}
+
+relative_time() { # <epoch> [now]
+  local t="$1" now="${2:-$(date +%s)}" d
+  d=$((now - t))
+  ((d < 0)) && d=0
+  if ((d < 60)); then
+    printf 'just now'
+  elif ((d < 3600)); then
+    printf '%dm ago' "$((d / 60))"
+  elif ((d < 86400)); then
+    printf '%dh ago' "$((d / 3600))"
+  elif ((d < 172800)); then
+    printf 'yesterday'
+  elif ((d < 604800)); then
+    printf '%dd ago' "$((d / 86400))"
+  else
+    date -d "@$t" '+%Y-%m-%d'
+  fi
+}
+
+fit() { # <str> <width> : truncate to width, then right-pad to width (char-based)
+  local s="$1" w="$2"
+  ((${#s} > w)) && s="${s:0:w}"
+  printf '%s%*s' "$s" "$((w - ${#s}))" ''
+}
+
+trunc() { # <str> <width> : truncate with trailing ellipsis, no padding
+  local s="$1" w="$2"
+  if ((${#s} > w)); then printf '%s…' "${s:0:w-1}"; else printf '%s' "$s"; fi
+}
+
+dashes() { # <n> : n box-drawing horizontal chars
+  local n="$1" out=''
+  while ((n-- > 0)); do out+='─'; done
+  printf '%s' "$out"
+}
+
+shorten_dir() { # <path> [width=DIR_W] : $HOME->~, elide middle to fit width (char-based)
+  local p="$1" w="${2:-$DIR_W}"
+  if [[ "$p" == "$HOME" ]]; then
+    p='~'
+  elif [[ "$p" == "$HOME"/* ]]; then
+    # shellcheck disable=SC2088  # literal ~ is intentional (display path, not a real home expansion)
+    p="~/${p#"$HOME"/}"
+  fi
+  if ((${#p} <= w)); then
+    printf '%s' "$p"
+    return
+  fi
+  local IFS=/ parts n
+  read -ra parts <<<"$p"
+  n=${#parts[@]}
+  if ((n >= 4)); then
+    p="${parts[0]}/…/${parts[n - 2]}/${parts[n - 1]}"
+  fi
+  # Hard guard: if still too long (very long tail segments), truncate from left.
+  if ((${#p} > w)); then p="…${p: -$((w - 1))}"; fi
+  printf '%s' "$p"
+}
+
+session_summary() { # <jsonl> : last ai-title, else first non-meta user text, else id
+  local jsonl="$1" title txt
+  title="$(grep '"type":"ai-title"' "$jsonl" 2>/dev/null | tail -1 |
+    jq -r '.aiTitle // empty' 2>/dev/null)"
+  if [ -n "$title" ]; then
+    printf '%s' "$title"
+    return
+  fi
+  txt="$(grep '"type":"user"' "$jsonl" 2>/dev/null |
+    jq -r 'select((.isMeta // false) | not)
+                  | .message.content
+                  | if type=="string" then .
+                    else ([ .[]? | select(.type=="text") | .text ] | join(" ")) end
+                  | select(. != null and . != "")' 2>/dev/null |
+    head -1)"
+  # strip <...> tags, collapse whitespace, trim
+  txt="$(printf '%s' "$txt" | sed 's/<[^>]*>//g; s/[[:space:]]\{1,\}/ /g; s/^ //; s/ $//')"
+  if [ -n "$txt" ]; then printf '%s' "$txt"; else basename "$jsonl" .jsonl; fi
+}
+
+branch_label() { # <branch> : display label; detached "HEAD" or empty -> "—"
+  case "$1" in
+    '' | HEAD) printf '—' ;;
+    *) printf '%s' "$1" ;;
+  esac
+}
+
+extract_session() { # <jsonl> -> "cwd<SEP>branch<SEP>summary"
+  local jsonl="$1" cwd branch summary
+  cwd="$(grep -m1 '"cwd":' "$jsonl" 2>/dev/null | jq -r '.cwd // empty' 2>/dev/null)"
+  branch="$(grep -m1 '"gitBranch":' "$jsonl" 2>/dev/null | jq -r '.gitBranch // empty' 2>/dev/null)"
+  summary="$(session_summary "$jsonl")"
+  # defensively strip separators/newlines so the delimited line stays well-formed
+  summary="${summary//$SEP/ }"
+  summary="${summary//$'\t'/ }"
+  summary="${summary//$'\n'/ }"
+  printf '%s%s%s%s%s\n' "$cwd" "$SEP" "$branch" "$SEP" "$summary"
+}
+
+build_row() { # <jsonl> <mtime_epoch> <now> -> "<display>\t<jsonl>"
+  local jsonl="$1" mtime="$2" now="$3" cwd branch summary status glyph
+  IFS=$SEP read -r cwd branch summary < <(extract_session "$jsonl")
+  status="$(dir_status "$cwd")"
+  [ "$status" = live ] && glyph='●' || glyph='✗'
+  local whenf dirf brf sumf row
+  whenf="$(fit "$(relative_time "$mtime" "$now")" "$WHEN_W")"
+  dirf="$(fit "$(shorten_dir "$cwd")" "$DIR_W")"
+  brf="$(fit "$(branch_label "$branch")" "$BRANCH_W")"
+  sumf="$(trunc "$summary" "$SUM_W")"
+  row="  ${glyph}  ${whenf}  ${dirf}  ${brf}  ${sumf}"
+  [ "$status" = gone ] && row="${DIM}${row}${RESET}"
+  printf '%s\t%s\n' "$row" "$jsonl"
+}
+
+build_list() { # <now> : all rows, newest-active first
+  local now="$1"
+  find "$PROJECTS" -mindepth 2 -maxdepth 2 -name '*.jsonl' -type f \
+    -printf '%T@\t%p\n' 2>/dev/null |
+    sort -rn |
+    while IFS=$'\t' read -r mtime jsonl; do
+      build_row "$jsonl" "${mtime%.*}" "$now"
+    done
+}
+
+make_header() { # <count> : hint + column header + separator
+  local count="$1" hint colhead sep
+  hint="  ccsession · ${count} sessions · ↑↓ select · / filter · ⏎ resume"
+  colhead="  ●  $(fit 'WHEN' "$WHEN_W")  $(fit 'DIRECTORY' "$DIR_W")  $(fit 'BRANCH' "$BRANCH_W")  SUMMARY"
+  sep="  ─  $(dashes "$WHEN_W")  $(dashes "$DIR_W")  $(dashes "$BRANCH_W")  $(dashes 30)"
+  printf '%s\n\n%s\n%s' "$hint" "$colhead" "$sep"
+}
+
+render_preview() { # <jsonl> : boxed card
+  local jsonl="$1" cwd branch summary status id mtime glyph statustxt
+  IFS=$SEP read -r cwd branch summary < <(extract_session "$jsonl")
+  id="$(basename "$jsonl" .jsonl)"
+  mtime="$(stat -c %Y "$jsonl" 2>/dev/null)"
+  status="$(dir_status "$cwd")"
+  if [ "$status" = live ]; then
+    glyph='●'
+    statustxt='live'
+  else
+    glyph='✗'
+    statustxt='directory gone'
+  fi
+
+  local PW=46
+  local active
+  active="$(date -d "@$mtime" '+%Y-%m-%d %H:%M') · $(relative_time "$mtime")"
+  local bw=$((PW + 2))
+
+  _line() { printf '│ %s │\n' "$(fit "$1" "$PW")"; }
+
+  printf '┌─ session %s┐\n' "$(dashes "$((bw - 10))")"
+  _line "${glyph} ${statustxt}"
+  _line ""
+  _line "dir      $(shorten_dir "$cwd" "$((PW - 9))")"
+  _line "branch   $(branch_label "$branch")"
+  _line "active   ${active}"
+  _line "id       ${id}"
+  printf '├%s┤\n' "$(dashes "$bw")"
+  local sline
+  while IFS= read -r sline; do _line "$sline"; done < <(printf '%s\n' "$summary" | fold -s -w "$PW")
+  printf '└%s┘\n' "$(dashes "$bw")"
+
+  unset -f _line
+}
+
+usage() {
+  cat <<'EOF'
+ccsession — list and resume Claude Code sessions
+
+Usage:
+  ccsession            open the session picker
+  ccsession --help     show this help
+
+In the picker: type to filter, ↑/↓ to move, Enter to resume the highlighted
+session (cd into its directory and run `claude --resume <id>`). Sessions whose
+directory no longer exists are shown with ✗ and cannot be resumed.
+EOF
+}
+
+launch() { # <jsonl>
+  local jsonl="$1" cwd id
+  cwd="$(extract_session "$jsonl" | cut -d"$SEP" -f1)"
+  id="$(basename "$jsonl" .jsonl)"
+  if [ -d "$cwd" ]; then
+    cd "$cwd" || {
+      printf 'cannot cd into: %s\n' "$cwd" >&2
+      exit 1
+    }
+    exec claude --resume "$id"
+  fi
+  printf 'directory no longer exists, cannot resume: %s\n' "$cwd" >&2
+  exit 1
+}
+
+main() {
+  case "${1:-}" in
+    --preview)
+      render_preview "$2"
+      return 0
+      ;;
+    -h | --help)
+      usage
+      return 0
+      ;;
+  esac
+
+  local now
+  now="$(date +%s)"
+  local list
+  list="$(build_list "$now")"
+  if [ -z "$list" ]; then
+    printf 'no Claude Code sessions found under %s\n' "$PROJECTS" >&2
+    return 1
+  fi
+  local count
+  count="$(printf '%s\n' "$list" | grep -c '')"
+  local header
+  header="$(make_header "$count")"
+
+  local selected
+  selected="$(printf '%s\n' "$list" | fzf \
+    --ansi \
+    --delimiter=$'\t' \
+    --with-nth=1 \
+    --layout=reverse \
+    --header-first \
+    --header="$header" \
+    --preview="$SELF --preview {2}" \
+    --preview-window='right,52,wrap')"
+  # fzf exits non-zero on ESC/no-selection; treat as a clean cancel.
+  [ -z "$selected" ] && return 0
+
+  launch "${selected##*$'\t'}"
+}
+
+if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
+  main "$@"
+fi

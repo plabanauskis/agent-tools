@@ -1,0 +1,8 @@
+# cchat — open Claude Code in a fresh ephemeral /tmp dir for throwaway chats.
+NAME=cchat
+ENTRYPOINT=cchat
+COMMANDS="cchat"
+DEPS="claude"
+PLATFORM="linux macos"
+DESC="Open Claude Code in a fresh ephemeral /tmp dir for throwaway chats"
+POST_ENABLE=""

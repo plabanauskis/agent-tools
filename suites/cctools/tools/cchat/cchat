@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# cchat — open Claude Code in a fresh, ephemeral temp dir for a throwaway chat.
+# A standalone script runs in its own process, so the parent shell's CWD is
+# untouched (no subshell trick needed, unlike the old ~/.zshrc function).
+set -euo pipefail
+
+case "${1:-}" in
+  -h | --help)
+    cat <<'EOF'
+cchat — open Claude Code in a fresh ephemeral temp dir for a throwaway chat.
+
+Usage:
+  cchat [claude args...]   Make a new temp dir, cd into it, and exec 'claude'.
+  cchat --help             Show this help.
+
+The temp dir is created under $TMPDIR (default /tmp) and persists until reboot,
+the same as before. All arguments are passed straight through to 'claude'.
+EOF
+    exit 0
+    ;;
+esac
+
+dir="$(mktemp -d "${TMPDIR:-/tmp}/cchat.XXXXXX")"
+cd "$dir"
+exec claude "$@"

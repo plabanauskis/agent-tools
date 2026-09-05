@@ -1,0 +1,8 @@
+# ccsession — fzf picker to list and resume any Claude Code session.
+NAME=ccsession
+ENTRYPOINT=ccsession
+COMMANDS="ccsession"
+DEPS="fzf jq claude"
+PLATFORM="linux macos"
+DESC="fzf picker to list and resume any Claude Code session"
+POST_ENABLE=""

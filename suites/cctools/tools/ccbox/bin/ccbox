@@ -1,0 +1,266 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CCBOX_VERSION="1.1.0"
+IMAGE="${CCBOX_IMAGE:-ccbox:latest}"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/ccbox" # legacy (ccbox 1.x GitHub App); only used by uninstall
+# readlink -f so we find the bundle even when invoked through the ~/.local/bin symlink.
+SCRIPT_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+DEFAULT_PORTS="3000-3010" # published by default; extend per-project below
+
+# Shared, cross-project language caches (volume names — used by launch and uninstall).
+CACHE_VOLUMES=(ccbox-npm ccbox-cargo ccbox-go ccbox-uv ccbox-nuget)
+
+ccbox_usage() {
+  cat <<EOF
+ccbox $CCBOX_VERSION — sandboxed autonomous Claude Code
+
+Usage:
+  ccbox [claude args...]   Launch the sandbox in the current dir (git repo, or any dir w/ warning)
+  ccbox build              Build/rebuild the image ($IMAGE) for your user
+  ccbox doctor             Check prerequisites and configuration
+  ccbox uninstall          Remove image + caches; prompt before data
+  ccbox help               Show this help
+
+The first word decides: one of {build, doctor, uninstall, help, version} runs that
+command; anything else is passed straight to 'claude' inside the sandbox.
+
+The box mirrors your environment: it runs as you, at your real \$HOME, with the repo at
+its real path, your ~/.claude mounted read-write (memories/plugins/config persist), and
+your host 'claude' binary mounted read-only (so the box always matches your host version).
+Only the system layer is isolated. See README "Security model".
+
+Env: CCBOX_IMAGE, CCBOX_PORTS, CCBOX_NO_DOCKER, CCBOX_SHARE_DIR, ANTHROPIC_API_KEY,
+     CCBOX_TINT (terminal bg color), CCBOX_NO_TINT=1 (disable the tint)
+EOF
+}
+
+# Locate the build context (Dockerfile): installed share dir, else the clone we run from.
+find_share_dir() {
+  local d
+  for d in "${CCBOX_SHARE_DIR:-/usr/share/ccbox}" "$SCRIPT_DIR/.." "$SCRIPT_DIR/../share/ccbox"; do
+    [ -f "$d/Dockerfile" ] && {
+      (cd "$d" && pwd)
+      return 0
+    }
+  done
+  return 1
+}
+
+ccbox_build() {
+  local share
+  share="$(find_share_dir)" || {
+    echo "ccbox: cannot find Dockerfile (set CCBOX_SHARE_DIR to its directory)." >&2
+    return 1
+  }
+  echo "ccbox: building $IMAGE from $share (user=$(id -un) UID=$(id -u) GID=$(id -g) home=$HOME)..."
+  # Mirror the host account into the image so in-box paths are identical to the host.
+  docker build \
+    --build-arg UID="$(id -u)" --build-arg GID="$(id -g)" \
+    --build-arg USERNAME="$(id -un)" --build-arg USER_HOME="$HOME" \
+    -t "$IMAGE" "$share"
+}
+
+ccbox_doctor() {
+  local fail=0
+  check() { if eval "$1" >/dev/null 2>&1; then printf '  %-12s ok\n' "$2"; else
+    printf '  %-12s MISSING — %s\n' "$2" "$3"
+    fail=1
+  fi; }
+  echo "ccbox doctor ($CCBOX_VERSION):"
+  check "command -v docker" docker "install Docker (README Prereq A)"
+  check "docker info -f '{{.Runtimes}}' | grep -q sysbox-runc" sysbox "install sysbox-ce (README Prereq C)"
+  check "command -v claude" claude "install Claude Code on the host (README Prereq B)"
+  check "test -f \"$HOME/.claude/.credentials.json\"" login "run 'claude' on the host to log in (Prereq B), or set ANTHROPIC_API_KEY"
+  check "docker image inspect $IMAGE" image "run 'ccbox build'"
+  [ "$fail" -eq 0 ] && echo "All good." || echo "Some items need attention (see above)."
+  return "$fail"
+}
+
+ccbox_uninstall() {
+  echo "ccbox uninstall — removes runtime artifacts (not the installed program files)."
+  echo
+
+  if docker image inspect "$IMAGE" >/dev/null 2>&1; then
+    docker rmi "$IMAGE" >/dev/null 2>&1 && echo "removed image $IMAGE" ||
+      echo "  (could not remove $IMAGE — is a container still using it?)"
+  fi
+
+  local v
+  for v in "${CACHE_VOLUMES[@]}"; do
+    docker volume inspect "$v" >/dev/null 2>&1 &&
+      docker volume rm "$v" >/dev/null 2>&1 && echo "removed cache volume $v"
+  done
+
+  local data=() ans
+  mapfile -t data < <(docker volume ls -q --filter name='^ccbox-docker-' 2>/dev/null || true)
+  if [ "${#data[@]}" -gt 0 ]; then
+    echo
+    echo "Per-project DATA volumes (your databases):"
+    printf '  %s\n' "${data[@]}"
+    printf 'Delete these %d data volume(s)? This destroys their data. [y/N] ' "${#data[@]}"
+    read -r ans </dev/tty 2>/dev/null || ans=n
+    case "$ans" in y | Y) for v in "${data[@]}"; do docker volume rm "$v" >/dev/null 2>&1 && echo "removed $v"; done ;;
+    *) echo "kept data volumes." ;; esac
+  fi
+
+  if [ -e "$CONFIG_DIR" ]; then
+    echo
+    printf 'Delete %s (legacy ccbox 1.x GitHub App config, no longer used)? [y/N] ' "$CONFIG_DIR"
+    read -r ans </dev/tty 2>/dev/null || ans=n
+    case "$ans" in y | Y) rm -rf "$CONFIG_DIR" && echo "removed $CONFIG_DIR" ;;
+    *) echo "kept $CONFIG_DIR." ;; esac
+  fi
+
+  echo
+  echo "Runtime teardown done. To remove the ccbox command from cctools:"
+  echo "  cctools disable ccbox"
+}
+
+# ---- subcommand dispatch (reserved first words; everything else launches) ----
+case "${1:-}" in
+  build)
+    shift
+    ccbox_build "$@"
+    exit $?
+    ;;
+  doctor)
+    shift
+    ccbox_doctor "$@"
+    exit $?
+    ;;
+  uninstall)
+    shift
+    ccbox_uninstall "$@"
+    exit $?
+    ;;
+  help)
+    ccbox_usage
+    exit 0
+    ;;
+  version)
+    echo "ccbox $CCBOX_VERSION"
+    exit 0
+    ;;
+esac
+
+# ---- launch path ----
+# Prefer the git repo root (so launching from any subdir mounts the whole repo). Outside a
+# repo we can still run, but git history is the agent's only undo for its in-scope edits — so
+# warn and confirm before mounting the current directory. No controlling TTY (autonomous run)
+# defaults to abort, matching the build/uninstall prompts.
+if repo_root="$(git rev-parse --show-toplevel 2>/dev/null)"; then
+  :
+else
+  repo_root="$(pwd -P)"
+  echo "ccbox: '$repo_root' is not a git repository." >&2
+  echo "ccbox: the agent runs autonomously with permissions skipped; without git history its" >&2
+  echo "ccbox: edits and deletions have NO undo. The whole directory is mounted read-write." >&2
+  printf 'Continue anyway? [y/N] ' >&2
+  read -r ans </dev/tty 2>/dev/null || ans=n
+  case "$ans" in y | Y) ;; *)
+    echo "ccbox: aborted." >&2
+    exit 1
+    ;;
+  esac
+fi
+
+docker info -f '{{.Runtimes}}' 2>/dev/null | grep -q sysbox-runc || {
+  echo "ccbox: sysbox runtime not found. Install sysbox-ce (README Prerequisite C)." >&2
+  exit 1
+}
+
+# Resolve the host's claude binary. The box runs this SAME binary (mounted read-only), so it
+# always matches the host version — no in-image install, no skew, no rebuild to update.
+host_claude="$(command -v claude 2>/dev/null || true)"
+[ -n "$host_claude" ] && host_claude="$(readlink -f "$host_claude")"
+if [ -z "$host_claude" ] || [ ! -x "$host_claude" ]; then
+  echo "ccbox: host 'claude' not found on PATH. Install Claude Code on the host first (README Prereq B)." >&2
+  exit 1
+fi
+claude_share="$HOME/.local/share/claude"
+if [ "${host_claude#"$claude_share"/}" = "$host_claude" ]; then
+  echo "ccbox: host claude at '$host_claude' isn't under $claude_share." >&2
+  echo "ccbox: only the native-installer layout is supported (an npm-global claude isn't mountable this way)." >&2
+  exit 1
+fi
+
+if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
+  echo "ccbox: image '$IMAGE' not found." >&2
+  printf 'Build it now? (~5 min, ~5GB) [y/N] ' >&2
+  read -r ans </dev/tty 2>/dev/null || ans=n
+  case "$ans" in y | Y) ccbox_build || exit 1 ;; *)
+    echo "ccbox: run 'ccbox build' first." >&2
+    exit 1
+    ;;
+  esac
+fi
+
+# published ports: default range + $CCBOX_PORTS + <repo>/.ccbox/ports (one token per line)
+ports=("$DEFAULT_PORTS")
+[ -n "${CCBOX_PORTS:-}" ] && {
+  read -r -a extra <<<"$CCBOX_PORTS"
+  ports+=("${extra[@]}")
+}
+[ -f "$repo_root/.ccbox/ports" ] && while read -r p; do [ -n "$p" ] && ports+=("$p"); done <"$repo_root/.ccbox/ports"
+
+# Per-project inner-Docker data volume (DB data + image cache survive between sessions).
+proj="$(basename "$repo_root" | tr -c 'A-Za-z0-9_.-' '_')"
+
+# Path-identical mirror: run as the host user, at the real $HOME, repo at its real path.
+# Project-keyed state (memories, session history, "trust") therefore unifies with the host.
+args=(docker run -it --rm
+  --runtime=sysbox-runc
+  -e HOME="$HOME"
+  -e TERM="${TERM:-xterm-256color}"
+  # Marker so anything inside the box (shells, scripts, prompts) can detect the sandbox.
+  -e CCBOX=1
+  -e CCBOX_VERSION="$CCBOX_VERSION"
+  # .claude.json lives at $HOME/.claude.json (outside the mounted dir); point Claude at the
+  # mounted dir so its main config persists in the box without re-onboarding and without the
+  # single-file-mount rename (EBUSY) problem.
+  -e CLAUDE_CONFIG_DIR="$HOME/.claude"
+  # The repo at its REAL host path — edits + commits are real; state keys match the host.
+  -v "$repo_root":"$repo_root" -w "$repo_root"
+  # Full read-write Claude state: memories, plugins, config, and credential refresh persist to host.
+  -v "$HOME/.claude":"$HOME/.claude"
+  # Host's own claude binary, read-only -> box version == host version; agent can't overwrite it.
+  -v "$claude_share":"$claude_share":ro
+  # The host pins the version; the mount is read-only. Disable all in-box update attempts so
+  # Claude Code never tries (and fails) to self-update. entrypoint.sh recreates the launcher
+  # symlink so the install-health check passes too.
+  -e DISABLE_UPDATES=1
+  # Inner Docker data, persistent per project.
+  -v "ccbox-docker-${proj}":/var/lib/docker)
+
+# Commit identity, read-only (git only reads it to author commits; pushes are intentionally
+# inert — no GitHub credentials are mounted, so the agent cannot push from the box).
+[ -f "$HOME/.gitconfig" ] && args+=(-v "$HOME/.gitconfig":"$HOME/.gitconfig":ro)
+
+for p in "${ports[@]}"; do args+=(-p "${p}:${p}"); done
+[ -n "${ANTHROPIC_API_KEY:-}" ] && args+=(-e ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY")
+
+# Persistent, cross-project language-package caches (safe to share — caches, never secrets).
+args+=(-v ccbox-npm:"$HOME/.npm"
+  -v ccbox-cargo:"$HOME/.cargo/registry"
+  -v ccbox-go:"$HOME/go/pkg"
+  -v ccbox-uv:"$HOME/.cache/uv"
+  -v ccbox-nuget:"$HOME/.nuget/packages")
+
+# Visual "you're in the sandbox" cue: tint the terminal background for the lifetime of
+# the session, restored on exit. We deliberately do NOT set the terminal title — Claude
+# Code rewrites the title on every prompt, so anything we set there is lost within
+# seconds. It never touches terminal *colors*, though, so a background tint survives the
+# whole session and stays robust regardless of how Claude Code's UI changes. Override the
+# color with CCBOX_TINT (e.g. CCBOX_TINT='#2a0e0e'); disable with CCBOX_NO_TINT=1.
+tint="${CCBOX_TINT:-#1a1530}"
+emit_osc() {
+  [ -w /dev/tty ] && printf '%b' "$1" >/dev/tty 2>/dev/null
+  return 0
+}
+set_tint() { [ "${CCBOX_NO_TINT:-0}" = "1" ] || emit_osc "\033]11;${tint}\007"; }
+clear_tint() { [ "${CCBOX_NO_TINT:-0}" = "1" ] || emit_osc "\033]111\007"; } # OSC 111 = reset bg to terminal default
+
+set_tint
+trap clear_tint EXIT INT TERM
+"${args[@]}" "$IMAGE" "$host_claude" --dangerously-skip-permissions "$@"

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" fill="none" role="img" aria-label="cchat — A throwaway Claude Code chat, in one command.">
+  <rect width="1280" height="640" fill="#14161B"/>
+
+  <!-- faint oversized bubble motif, bottom-right -->
+  <g transform="translate(1170,560) scale(7) translate(-72,-80)" opacity="0.05">
+    <rect x="32" y="44" width="80" height="56" rx="14" fill="#F4F1EA"/>
+    <polygon points="52,96 48,118 72,96" fill="#F4F1EA"/>
+  </g>
+
+  <!-- lockup: bubble -->
+  <g transform="translate(640,170) scale(2.4) translate(-72,-80)">
+    <rect x="32" y="44" width="80" height="56" rx="14" fill="#F4F1EA"/>
+    <polygon points="52,96 48,118 72,96" fill="#F4F1EA"/>
+    <polyline points="-7,-10 6,0 -7,10" transform="translate(72,72)" stroke="#D97757" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="640" y="360" text-anchor="middle" font-family="ui-monospace,'DejaVu Sans Mono','JetBrains Mono',Menlo,Consolas,monospace" font-size="104" font-weight="700" letter-spacing="-2"><tspan fill="#D97757">cc</tspan><tspan fill="#F4F1EA">hat</tspan></text>
+
+  <!-- headline -->
+  <text x="640" y="462" text-anchor="middle" font-family="'DejaVu Sans',ui-sans-serif,system-ui,sans-serif" font-size="40" font-weight="600" fill="#F4F1EA">A throwaway Claude Code chat, in one command.</text>
+  <text x="640" y="514" text-anchor="middle" font-family="'DejaVu Sans',ui-sans-serif,system-ui,sans-serif" font-size="40" font-weight="600" fill="#F4F1EA">Leaves no trace.</text>
+
+  <!-- footer -->
+  <text x="640" y="596" text-anchor="middle" font-family="ui-monospace,'DejaVu Sans Mono',monospace" font-size="26" fill="#D97757" opacity="0.85">github.com/plabanauskis/cctools</text>
+</svg>

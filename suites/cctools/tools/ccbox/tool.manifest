@@ -1,0 +1,8 @@
+# ccbox — sandboxed autonomous Claude Code via Docker + sysbox.
+NAME=ccbox
+ENTRYPOINT=bin/ccbox
+COMMANDS="ccbox"
+DEPS="docker sysbox-runc claude"
+PLATFORM="linux"
+DESC="Sandboxed autonomous Claude Code via Docker + sysbox"
+POST_ENABLE="Run 'ccbox build' once to build the sandbox image (~5 min, ~5GB). 'ccbox doctor' verifies the sysbox runtime is registered with Docker."

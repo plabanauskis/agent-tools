@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="160" viewBox="0 0 360 160" fill="none" role="img" aria-label="cchat">
+  <title>cchat</title>
+  <rect x="32" y="44" width="80" height="56" rx="14" fill="#16181D"/>
+  <polygon points="52,96 48,118 72,96" fill="#16181D"/>
+  <polyline points="-7,-10 6,0 -7,10" transform="translate(72,72)" stroke="#D97757" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+  <text x="144" y="80" dominant-baseline="central" font-family="ui-monospace,'JetBrains Mono','SF Mono',Menlo,Consolas,monospace" font-size="60" font-weight="700" letter-spacing="-1"><tspan fill="#D97757">cc</tspan><tspan fill="#16181D">hat</tspan></text>
+</svg>

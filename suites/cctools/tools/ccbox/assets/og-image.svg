@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" fill="none" role="img" aria-label="ccbox — Give Claude Code full control of your project, never of your computer.">
+  <rect width="1280" height="640" fill="#14161B"/>
+
+  <!-- faint oversized cube motif, bottom-right -->
+  <g transform="translate(1170,560) scale(7) translate(-72,-80)" opacity="0.05">
+    <polygon points="72,40 108,58 72,76 36,58" fill="#D97757"/>
+    <polygon points="36,58 72,76 72,120 36,102" fill="#F4F1EA"/>
+    <polygon points="72,76 108,58 108,102 72,120" fill="#F4F1EA" fill-opacity="0.6"/>
+  </g>
+
+  <!-- lockup: cube -->
+  <g transform="translate(640,170) scale(2.4) translate(-72,-80)">
+    <polygon points="72,40 108,58 72,76 36,58" fill="#D97757"/>
+    <polygon points="36,58 72,76 72,120 36,102" fill="#F4F1EA"/>
+    <polygon points="72,76 108,58 108,102 72,120" fill="#F4F1EA" fill-opacity="0.6"/>
+    <polyline points="-6,-9 5,0 -6,9" transform="translate(54,90) skewY(26.57)" stroke="#D97757" stroke-width="5.5" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <!-- wordmark -->
+  <text x="640" y="360" text-anchor="middle" font-family="ui-monospace,'DejaVu Sans Mono','JetBrains Mono',Menlo,Consolas,monospace" font-size="104" font-weight="700" letter-spacing="-2"><tspan fill="#D97757">cc</tspan><tspan fill="#F4F1EA">box</tspan></text>
+
+  <!-- headline -->
+  <text x="640" y="462" text-anchor="middle" font-family="'DejaVu Sans',ui-sans-serif,system-ui,sans-serif" font-size="40" font-weight="600" fill="#F4F1EA">Give Claude Code full control of your project,</text>
+  <text x="640" y="514" text-anchor="middle" font-family="'DejaVu Sans',ui-sans-serif,system-ui,sans-serif" font-size="40" font-weight="600" fill="#F4F1EA">never of your computer.</text>
+
+  <!-- footer -->
+  <text x="640" y="596" text-anchor="middle" font-family="ui-monospace,'DejaVu Sans Mono',monospace" font-size="26" fill="#D97757" opacity="0.85">github.com/plabanauskis/ccbox</text>
+</svg>

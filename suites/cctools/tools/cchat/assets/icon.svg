@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="16 24 112 112" fill="none" role="img" aria-label="cchat">
+  <title>cchat</title>
+  <rect x="32" y="44" width="80" height="56" rx="14" fill="#16181D"/>
+  <polygon points="52,96 48,118 72,96" fill="#16181D"/>
+  <polyline points="-7,-10 6,0 -7,10" transform="translate(72,72)" stroke="#D97757" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
