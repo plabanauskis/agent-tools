@@ -39,7 +39,7 @@ assert_contains() { case "$1" in *"$2"*) ok ;; *) bad "$3 ([$1] lacks [$2])" ;; 
 make_source_repo() {
   local source="$SANDBOX/source"
   mkdir -p "$source"
-  (cd "$REPO" && tar --exclude=.git --exclude=.superpowers -cf - .) |
+  (cd "$REPO/../.." && tar --exclude=.git --exclude=.pi --exclude=.superpowers -cf - .) |
     (cd "$source" && tar -xf -)
   git -C "$source" init -q -b main
   git -C "$source" config user.email test@example.invalid
@@ -54,7 +54,7 @@ make_source_repo() {
 # shellcheck disable=SC2034
 # Variables are consumed by the dynamically sourced installer; exporting the
 # test-source flag would leak it into the real installer subprocess below.
-COTOOLS_HOME="$REPO"
+COTOOLS_HOME="$(cd "$REPO/../.." && pwd)"
 # shellcheck disable=SC2034
 COTOOLS_TEST_SOURCE=1
 if [ -f "$REPO/install.sh" ]; then
@@ -85,8 +85,8 @@ out="$(COTOOLS_REPO="file://$SOURCE_REPO" COTOOLS_HOME="$PREFIX" COTOOLS_BIN="$B
   COTOOLS_BRANCH=main PATH="$FAKEBIN:$PATH" HOME="$SANDBOX/home" \
   bash "$REPO/install.sh" --tools=cochat,cosession 2>&1)"
 assert_eq "$([ -d "$PREFIX/.git" ] && echo y || echo n)" "y" "install: clones prefix"
-assert_eq "$(readlink "$BIN/cochat" 2>/dev/null)" "$PREFIX/tools/cochat/cochat" "install: links cochat"
-assert_eq "$(readlink "$BIN/cosession" 2>/dev/null)" "$PREFIX/tools/cosession/cosession" "install: links cosession"
+assert_eq "$(readlink "$BIN/cochat" 2>/dev/null)" "$PREFIX/suites/cotools/tools/cochat/cochat" "install: links cochat"
+assert_eq "$(readlink "$BIN/cosession" 2>/dev/null)" "$PREFIX/suites/cotools/tools/cosession/cosession" "install: links cosession"
 assert_eq "$(readlink "$BIN/cotools" 2>/dev/null)" "$PREFIX/bin/cotools" "install: always links cotools"
 assert_eq "$([ -e "$BIN/cobox" ] && echo y || echo n)" "n" "install: does not link unselected cobox"
 assert_contains "$out" "== cotools install summary ==" "install: prints cotools summary"
@@ -108,7 +108,7 @@ forced_out="$(COTOOLS_TEST_UNAME=Darwin COTOOLS_REPO="file://$SOURCE_REPO" \
 forced_rc=$?
 assert_eq "$forced_rc" "0" "install: force accepts unsupported platform"
 assert_contains "$forced_out" "cobox" "install: force reports unsupported tool as enabled"
-assert_eq "$(readlink "$FORCED_BIN/cobox" 2>/dev/null)" "$FORCED_PREFIX/tools/cobox/bin/cobox" \
+assert_eq "$(readlink "$FORCED_BIN/cobox" 2>/dev/null)" "$FORCED_PREFIX/suites/cotools/tools/cobox/bin/cobox" \
   "install: force links unsupported tool"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

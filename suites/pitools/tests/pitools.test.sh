@@ -9,7 +9,8 @@ REPO="$(cd "$HERE/.." && pwd)"
 
 SANDBOX="$(mktemp -d)"
 trap 'rm -rf "$SANDBOX"' EXIT
-export PITOOLS_HOME="$REPO"
+PITOOLS_HOME="$(cd "$REPO/../.." && pwd)"
+export PITOOLS_HOME
 export PITOOLS_BIN="$SANDBOX/bin"
 FAKEBIN="$SANDBOX/fakebin"
 mkdir -p "$FAKEBIN"

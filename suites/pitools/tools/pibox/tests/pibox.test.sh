@@ -306,6 +306,9 @@ set -e
 assert_zero "$build_rc" 'build resolves the real pibox Dockerfile through a launcher symlink'
 if [ -f "$BUILD_RECORD" ]; then
   mapfile -t RECORDED <"$BUILD_RECORD"
+  assert_eq "${RECORDED[1]:-}" '--file' 'build passes an explicit Dockerfile'
+  assert_eq "${RECORDED[2]:-}" "$(readlink -f "$HERE/../Dockerfile")" \
+    'build resolves the shared recipe outside the context for BuildKit'
   assert_eq "${RECORDED[${#RECORDED[@]} - 1]:-}" "$(cd "$HERE/.." && pwd)" \
     'build uses tools/pibox as its fallback context'
 else
@@ -321,7 +324,7 @@ if [ -f "$DOCKERFILE" ]; then
   assert_contains "$dockerfile_text" 'ARG DOTNET_CHANNEL=10.0' 'Dockerfile keeps .NET 10'
   assert_not_contains "$dockerfile_text" '@earendil-works/pi-coding-agent' \
     'Dockerfile must not embed a second Pi installation'
-  assert_contains "$dockerfile_text" '/etc/profile.d/pibox-toolchains.sh' \
+  assert_contains "$dockerfile_text" '/etc/profile.d/agent-tools-toolchains.sh' \
     'Dockerfile keeps interactive toolchain paths'
 else
   fail 'missing Dockerfile'

@@ -9,7 +9,8 @@ REPO="$(cd "$HERE/.." && pwd)"
 
 SANDBOX="$(mktemp -d)"
 trap 'rm -rf "$SANDBOX"' EXIT
-export CCTOOLS_HOME="$REPO"
+CCTOOLS_HOME="$(cd "$REPO/../.." && pwd)"
+export CCTOOLS_HOME
 export CCTOOLS_BIN="$SANDBOX/bin"
 FAKEBIN="$SANDBOX/fakebin"
 mkdir -p "$FAKEBIN"

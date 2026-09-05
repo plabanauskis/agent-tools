@@ -16,6 +16,9 @@ printf '# Changelog — cchat\n\n## 1.0.0 — 2026-06-24\n\n- Initial.\n' >"$CCT
 
 # shellcheck source=/dev/null
 source "$REPO/scripts/release.sh"
+# Unit helpers operate on the isolated suite fixture, not the actual checkout.
+# shellcheck disable=SC2034 # Consumed by dynamically sourced release helpers.
+RELEASE_ROOT="$CCTOOLS_HOME"
 
 PASS=0
 FAIL=0

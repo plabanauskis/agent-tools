@@ -37,7 +37,9 @@ done
 need_file README.md
 
 # Keep public/local install, Pi state/session, exact-install, and isolation promises visible.
-need_text README.md 'curl -fsSL https://raw.githubusercontent.com/plabanauskis/pitools/main/install.sh | bash'
+need_text README.md 'gh repo clone plabanauskis/agent-tools'
+need_text README.md 'bash install.sh --suite=pitools'
+need_text README.md 'repository is private'
 need_text README.md "PITOOLS_REPO=\"file://\$PWD\""
 need_text README.md 'fetches and prunes, then hard-resets'
 need_text README.md 'PI_CODING_AGENT_DIR'

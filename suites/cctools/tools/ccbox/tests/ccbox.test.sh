@@ -9,8 +9,8 @@
 # with "cannot find Dockerfile".
 set -u
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CCBOX="$(readlink -f "$HERE/../bin/ccbox")"   # absolute path to the real script
-CCBOX_DIR="$(cd "$HERE/.." && pwd)"            # tools/ccbox — where the Dockerfile lives
+CCBOX="$(readlink -f "$HERE/../bin/ccbox")" # absolute path to the real script
+CCBOX_DIR="$(cd "$HERE/.." && pwd)"         # tools/ccbox — where the Dockerfile lives
 
 PASS=0
 FAIL=0
@@ -58,13 +58,15 @@ chmod +x "$BIN/docker"
 run_build() { CCBOX_SHARE_DIR="$SANDBOX/empty-share" PATH="$BIN:$PATH" "$1" build 2>&1; }
 
 # --- invoked through the symlink (the cctools install case) ---
-out="$(run_build "$BIN/ccbox")"; rc=$?
+out="$(run_build "$BIN/ccbox")"
+rc=$?
 assert_eq "$rc" "0" "build via symlink: exits 0 (Dockerfile resolved)"
 refute_contains "$out" "cannot find Dockerfile" "build via symlink: no resolution error"
 assert_contains "$out" "from $CCBOX_DIR" "build via symlink: resolves to the real bundle dir"
 
 # --- invoked directly (run-from-clone case still works) ---
-out_direct="$(run_build "$CCBOX")"; rc_direct=$?
+out_direct="$(run_build "$CCBOX")"
+rc_direct=$?
 assert_eq "$rc_direct" "0" "build run directly: exits 0 (Dockerfile resolved)"
 refute_contains "$out_direct" "cannot find Dockerfile" "build run directly: no resolution error"
 
@@ -75,7 +77,8 @@ refute_contains "$out_direct" "cannot find Dockerfile" "build run directly: no r
 if command -v setsid >/dev/null 2>&1; then
   # non-git: a fresh temp dir (and its parents) are not a git repo.
   NOGIT="$(mktemp -d)"
-  out_nogit="$(cd "$NOGIT" && setsid -w env PATH="$BIN:$PATH" "$BIN/ccbox" 2>&1)"; rc_nogit=$?
+  out_nogit="$(cd "$NOGIT" && setsid -w env PATH="$BIN:$PATH" "$BIN/ccbox" 2>&1)"
+  rc_nogit=$?
   rm -rf "$NOGIT"
   assert_contains "$out_nogit" "is not a git repository" "non-git: warns it is not a git repo"
   assert_contains "$out_nogit" "NO undo" "non-git: warns the agent's edits have no undo"

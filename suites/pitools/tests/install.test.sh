@@ -39,7 +39,7 @@ assert_contains() { case "$1" in *"$2"*) ok ;; *) bad "$3 ([$1] lacks [$2])" ;; 
 make_source_repo() {
   local source="$SANDBOX/source"
   mkdir -p "$source"
-  (cd "$REPO" && tar --exclude=.git --exclude=.superpowers -cf - .) |
+  (cd "$REPO/../.." && tar --exclude=.git --exclude=.pi --exclude=.superpowers -cf - .) |
     (cd "$source" && tar -xf -)
   git -C "$source" init -q -b main
   git -C "$source" config user.email test@example.invalid
@@ -54,7 +54,7 @@ make_source_repo() {
 # shellcheck disable=SC2034
 # Variables are consumed by the dynamically sourced installer; exporting the
 # test-source flag would leak it into the real installer subprocess below.
-PITOOLS_HOME="$REPO"
+PITOOLS_HOME="$(cd "$REPO/../.." && pwd)"
 # shellcheck disable=SC2034
 PITOOLS_TEST_SOURCE=1
 if [ -f "$REPO/install.sh" ]; then
@@ -85,8 +85,8 @@ out="$(PITOOLS_REPO="file://$SOURCE_REPO" PITOOLS_HOME="$PREFIX" PITOOLS_BIN="$B
   PITOOLS_BRANCH=main PATH="$FAKEBIN:$PATH" HOME="$SANDBOX/home" \
   bash "$REPO/install.sh" --tools=pichat,pisession 2>&1)"
 assert_eq "$([ -d "$PREFIX/.git" ] && echo y || echo n)" "y" "install: clones prefix"
-assert_eq "$(readlink "$BIN/pichat" 2>/dev/null)" "$PREFIX/tools/pichat/pichat" "install: links pichat"
-assert_eq "$(readlink "$BIN/pisession" 2>/dev/null)" "$PREFIX/tools/pisession/pisession" "install: links pisession"
+assert_eq "$(readlink "$BIN/pichat" 2>/dev/null)" "$PREFIX/suites/pitools/tools/pichat/pichat" "install: links pichat"
+assert_eq "$(readlink "$BIN/pisession" 2>/dev/null)" "$PREFIX/suites/pitools/tools/pisession/pisession" "install: links pisession"
 assert_eq "$(readlink "$BIN/pitools" 2>/dev/null)" "$PREFIX/bin/pitools" "install: always links pitools"
 assert_eq "$([ -e "$BIN/pibox" ] && echo y || echo n)" "n" "install: does not link unselected pibox"
 assert_contains "$out" "== pitools install summary ==" "install: prints pitools summary"
@@ -108,7 +108,7 @@ forced_out="$(PITOOLS_TEST_UNAME=Darwin PITOOLS_REPO="file://$SOURCE_REPO" \
 forced_rc=$?
 assert_eq "$forced_rc" "0" "install: force accepts unsupported platform"
 assert_contains "$forced_out" "pibox" "install: force reports unsupported tool as enabled"
-assert_eq "$(readlink "$FORCED_BIN/pibox" 2>/dev/null)" "$FORCED_PREFIX/tools/pibox/bin/pibox" \
+assert_eq "$(readlink "$FORCED_BIN/pibox" 2>/dev/null)" "$FORCED_PREFIX/suites/pitools/tools/pibox/bin/pibox" \
   "install: force links unsupported tool"
 
 printf '\n%d passed, %d failed\n' "$PASS" "$FAIL"

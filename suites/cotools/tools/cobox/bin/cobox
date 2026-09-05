@@ -98,7 +98,8 @@ cobox_build() {
     return 1
   }
   echo "cobox: building $IMAGE from $share (user=$(id -un) UID=$(id -u) GID=$(id -g) home=$HOME)..."
-  docker build \
+  # The shared recipe is outside this context; pass its real path to BuildKit.
+  docker build --file "$(readlink -f "$share/Dockerfile")" \
     --build-arg UID="$(id -u)" --build-arg GID="$(id -g)" \
     --build-arg USERNAME="$(id -un)" --build-arg USER_HOME="$HOME" \
     -t "$IMAGE" "$share"

@@ -33,8 +33,9 @@ need_text() {
 
 has_rendered_color() {
   local file="$1" color="$2"
+  # Consume the histogram fully: grep -q can SIGPIPE convert under pipefail.
   convert -background none "$file" -resize 512x512 -depth 8 -format '%c' histogram:info:- |
-    grep -qi "${color#\#}"
+    grep -i "${color#\#}" >/dev/null
 }
 
 for tool in cochat cosession cobox; do
@@ -48,7 +49,9 @@ done
 for readme in README.md tools/cochat/README.md tools/cosession/README.md tools/cobox/README.md; do
   need_readme "$readme"
 done
-need_text README.md 'curl -fsSL https://raw.githubusercontent.com/plabanauskis/cotools/main/install.sh | bash'
+need_text README.md 'gh repo clone plabanauskis/agent-tools'
+need_text README.md 'bash install.sh --suite=cotools'
+need_text README.md 'repository is private'
 need_text README.md 'not affiliated with or endorsed by OpenAI'
 need_text README.md 'fetches and prunes, then hard-resets'
 need_text README.md 'COTOOLS_REPO'

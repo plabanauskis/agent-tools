@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Invoked through the cctools/cotools/pitools symlinks; also sourceable in tests.
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then set -euo pipefail; fi
+SUITE="$(basename "${BASH_SOURCE[0]}")"
+source_path="${BASH_SOURCE[0]}"
+while [ -h "$source_path" ]; do
+  source_dir="$(cd -P "$(dirname "$source_path")" && pwd)"
+  target="$(readlink "$source_path")"
+  case "$target" in
+    /*) source_path="$target" ;;
+    *) source_path="$source_dir/$target" ;;
+  esac
+done
+SOURCE_ROOT="$(cd -P "$(dirname "$source_path")/.." && pwd)"
+# shellcheck source=../lib/common.sh
+. "$SOURCE_ROOT/lib/common.sh"
+configure_suite "$SUITE" || return 1 2>/dev/null || exit 1
+PREFIX="$(suite_env HOME "$SOURCE_ROOT")"
+PREFIX="$(cd "$PREFIX" && pwd -P)"
+ROOT="$PREFIX/suites/$SUITE"
+TOOLS_DIR="$ROOT/tools"
+BIN_DIR="$(suite_env BIN "$HOME/.local/bin")"
+if [ -f "$PREFIX/.agent-tools-suite" ]; then
+  require_managed_prefix || return 1 2>/dev/null || exit 1
+fi
+# shellcheck source=../lib/manager.sh
+. "$SOURCE_ROOT/lib/manager.sh"
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then main "$@"; fi

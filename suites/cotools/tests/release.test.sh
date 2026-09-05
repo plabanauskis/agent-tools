@@ -21,6 +21,9 @@ printf '#!/usr/bin/env bash\nCOBOX_VERSION="1.0.0"\n' \
 
 # shellcheck source=/dev/null
 source "$REPO/scripts/release.sh"
+# Unit helpers operate on the isolated suite fixture, not the actual checkout.
+# shellcheck disable=SC2034 # Consumed by dynamically sourced release helpers.
+RELEASE_ROOT="$COTOOLS_HOME"
 
 PASS=0
 FAIL=0

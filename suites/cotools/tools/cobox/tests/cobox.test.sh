@@ -427,6 +427,9 @@ assert_zero "$build_rc" \
   "build context: resolving a launcher symlink must still locate the real cobox Dockerfile"
 if [ -f "$BUILD_RECORD" ]; then
   mapfile -t RECORDED <"$BUILD_RECORD"
+  assert_eq "${RECORDED[1]:-}" '--file' 'build passes an explicit Dockerfile'
+  assert_eq "${RECORDED[2]:-}" "$(readlink -f "$HERE/../Dockerfile")" \
+    'build resolves the shared recipe outside the context for BuildKit'
   assert_eq "${RECORDED[${#RECORDED[@]} - 1]:-}" "$(cd "$HERE/.." && pwd)" \
     "build context: an empty COBOX_SHARE_DIR must fall back to the real tools/cobox directory"
 else
@@ -445,7 +448,7 @@ if [ -f "$DOCKERFILE" ]; then
     "Dockerfile .NET: changing the .NET 10 build argument changes the supported toolchain"
   assert_not_contains "$dockerfile_text" "@openai/codex" \
     "Dockerfile Codex: the image must not embed a host-authenticated Codex installation"
-  assert_contains "$dockerfile_text" "/etc/profile.d/cobox-toolchains.sh" \
+  assert_contains "$dockerfile_text" "/etc/profile.d/agent-tools-toolchains.sh" \
     "Dockerfile profiles: shell toolchain setup must remain available to interactive commands"
 else
   fail "missing Dockerfile: cobox build needs its container context"

@@ -35,7 +35,9 @@ assert_eq() {
 # Note: VAR=val prefix to a bash builtin (source) is temporary — the shell restores
 # the previous variable state after the builtin returns (bash 5.x behaviour). Set
 # variables explicitly before sourcing so they persist into subsequent calls.
-CCTOOLS_HOME="$REPO"
+# shellcheck disable=SC2034 # Consumed by the sourced installer, not exported to subprocesses.
+CCTOOLS_HOME="$(cd "$REPO/../.." && pwd)"
+# shellcheck disable=SC2034
 CCTOOLS_TEST_SOURCE=1
 source "$REPO/install.sh"
 load_lib
@@ -48,21 +50,30 @@ assert_eq "$(PATH=/nonexistent missing_deps)" "claude" "install: missing_deps re
 # --- integration: real clone + link via the actual script process ---
 PREFIX="$SANDBOX/prefix"
 BIN="$SANDBOX/bin"
-# Clone from the current branch so the test works on feature branches before
-# they are merged to main (where the tools may not yet exist).
-CURRENT_BRANCH="$(git -C "$REPO" rev-parse --abbrev-ref HEAD)"
-out="$(CCTOOLS_REPO="file://$REPO" CCTOOLS_HOME="$PREFIX" CCTOOLS_BIN="$BIN" \
+# Include the working tree so this exercises uncommitted consolidation changes.
+SOURCE_REPO="$SANDBOX/source"
+mkdir -p "$SOURCE_REPO"
+(cd "$REPO/../.." && tar --exclude=.git --exclude=.pi --exclude=.superpowers -cf - .) |
+  (cd "$SOURCE_REPO" && tar -xf -)
+git -C "$SOURCE_REPO" init -q -b main
+git -C "$SOURCE_REPO" config user.email test@example.invalid
+git -C "$SOURCE_REPO" config user.name test
+git -C "$SOURCE_REPO" add .
+git -C "$SOURCE_REPO" commit -q -m fixture
+CURRENT_BRANCH=main
+out="$(CCTOOLS_REPO="file://$SOURCE_REPO" CCTOOLS_HOME="$PREFIX" CCTOOLS_BIN="$BIN" \
   CCTOOLS_BRANCH="$CURRENT_BRANCH" \
   PATH="$FAKEBIN:$PATH" HOME="$SANDBOX/home" \
   bash "$REPO/install.sh" --tools=cchat,ccsession 2>&1)"
+assert_eq "$([[ "$out" == *'== cctools install summary =='* ]] && echo y || echo n)" "y" "install: prints summary"
 assert_eq "$([ -d "$PREFIX/.git" ] && echo y || echo n)" "y" "install: clones prefix"
-assert_eq "$(readlink "$BIN/cchat")" "$PREFIX/tools/cchat/cchat" "install: links cchat"
-assert_eq "$(readlink "$BIN/ccsession")" "$PREFIX/tools/ccsession/ccsession" "install: links ccsession"
+assert_eq "$(readlink "$BIN/cchat")" "$PREFIX/suites/cctools/tools/cchat/cchat" "install: links cchat"
+assert_eq "$(readlink "$BIN/ccsession")" "$PREFIX/suites/cctools/tools/ccsession/ccsession" "install: links ccsession"
 assert_eq "$(readlink "$BIN/cctools")" "$PREFIX/bin/cctools" "install: always links cctools"
 assert_eq "$([ -e "$BIN/ccbox" ] && echo y || echo n)" "n" "install: does not link unselected ccbox"
 
 # --- idempotent re-run (existing clone -> pull, re-link) ---
-CCTOOLS_REPO="file://$REPO" CCTOOLS_HOME="$PREFIX" CCTOOLS_BIN="$BIN" \
+CCTOOLS_REPO="file://$SOURCE_REPO" CCTOOLS_HOME="$PREFIX" CCTOOLS_BIN="$BIN" \
   CCTOOLS_BRANCH="$CURRENT_BRANCH" \
   PATH="$FAKEBIN:$PATH" HOME="$SANDBOX/home" \
   bash "$REPO/install.sh" --tools=cchat >/dev/null 2>&1

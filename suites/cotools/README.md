@@ -1,107 +1,81 @@
-<div align="center">
-
-<p>
-  <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cochat/assets/icon-dark.svg"><img src="tools/cochat/assets/icon.svg" alt="cochat" height="56"></picture>
-  &nbsp;&nbsp;&nbsp;
-  <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cosession/assets/icon-dark.svg"><img src="tools/cosession/assets/icon.svg" alt="cosession" height="56"></picture>
-  &nbsp;&nbsp;&nbsp;
-  <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cobox/assets/icon-dark.svg"><img src="tools/cobox/assets/icon.svg" alt="cobox" height="56"></picture>
-</p>
-
 # cotools
 
-<p><strong>Three small terminal helpers for Codex — one installer, install only what you want.</strong></p>
+Three focused Codex terminal helpers, now maintained in the
+[agent-tools monorepo](../../README.md). Shared installation and management code;
+Codex-specific session and container behavior.
 
-<p>
-  <a href="LICENSE"><img alt="License: MIT" src="https://img.shields.io/badge/license-MIT-555"></a>
-  <img alt="Built for Codex" src="https://img.shields.io/badge/built%20for-Codex-10A37F">
-  <img alt="Install: no sudo · no daemons" src="https://img.shields.io/badge/install-no%20sudo%20%C2%B7%20no%20daemons-555">
-</p>
-
-</div>
-
-Three focused helpers for working with the [Codex CLI](https://learn.chatgpt.com/docs/developer-commands?surface=cli) in a Linux or macOS terminal. They are bundled behind one installer and a small management command; install only the tools you need.
-
-| Tool | What it does | Dependencies | Platform |
+| Tool | Purpose | Dependencies | Platform |
 | --- | --- | --- | --- |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cochat/assets/icon-dark.svg"><img src="tools/cochat/assets/icon.svg" alt="" width="20"></picture> [**cochat**](tools/cochat/README.md) | Opens Codex in a fresh temporary directory for a throwaway chat | `codex` | Linux, macOS |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cosession/assets/icon-dark.svg"><img src="tools/cosession/assets/icon.svg" alt="" width="20"></picture> [**cosession**](tools/cosession/README.md) | Finds and resumes local Codex sessions with an `fzf` picker | `fzf`, `jq`, `codex` | Linux, macOS |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="tools/cobox/assets/icon-dark.svg"><img src="tools/cobox/assets/icon.svg" alt="" width="20"></picture> [**cobox**](tools/cobox/README.md) | Runs autonomous Codex against a mounted project inside Docker + sysbox | `docker`, `sysbox-runc`, `codex` | Linux (amd64) |
-
-`cochat` and `cosession` are lightweight, portable shell tools. `cobox` is deliberately heavier: it needs a locally built Docker image and Linux's sysbox runtime. The installer is dependency-aware and opt-in, so selecting `cosession` does not install or build the box.
+| [cochat](tools/cochat/README.md) | Throwaway chat in a fresh temporary directory | `codex` | Linux, macOS |
+| [cosession](tools/cosession/README.md) | fzf session picker and resume | `fzf`, `jq`, `codex` | Linux, macOS |
+| [cobox](tools/cobox/README.md) | Autonomous Codex in Docker + sysbox | `docker`, `sysbox-runc`, `codex` | Linux amd64 |
 
 ## Install
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/plabanauskis/cotools/main/install.sh | bash
-```
-
-Read the installer first if you prefer:
+The repository is private. Use authenticated Git, not an unauthenticated raw URL:
 
 ```bash
-curl -fsSL -O https://raw.githubusercontent.com/plabanauskis/cotools/main/install.sh
-less install.sh
-bash install.sh                       # interactive picker
-bash install.sh --all                 # every eligible tool
-bash install.sh --tools=cochat,cosession
+gh auth login
+gh auth setup-git
+gh repo clone plabanauskis/agent-tools
+cd agent-tools
+bash install.sh --suite=cotools --tools=cochat,cosession
 ```
 
-The installer needs Git. It chooses tools interactively with a TTY; otherwise it enables only tools supported by the host and with available dependencies. `--force` creates links even when a dependency is missing.
+Or run `bash suites/cotools/install.sh` from the monorepo root for the interactive
+picker. `--all` selects the suite; `--force` overrides missing dependencies and
+platform checks. Selecting the lightweight tools never builds a Docker image.
 
-## What gets installed
-
-No sudo, no `/usr` or `/etc` changes, and no daemons. The installer writes only these user-owned locations:
-
-- `~/.local/share/cotools` — the Git clone, the single source of truth. Override with `COTOOLS_HOME`.
-- `~/.local/bin` — the `cotools` link and one link per enabled command. Override with `COTOOLS_BIN`.
-
-For a mirror or fork, set `COTOOLS_REPO` to the clone URL and `COTOOLS_BRANCH`
-to the branch before running `install.sh`; their defaults are this repository
-and `main`.
-
-If the bin directory is not on `PATH`, the installer prints the exact export to add to the shell startup file.
-
-To remove the suite, remove box runtime artifacts first if applicable:
+For a local development install:
 
 ```bash
-cobox uninstall       # first, if cobox was used: image and caches; data stays opt-in
-cotools uninstall     # links and the cotools clone; prompts first
+COTOOLS_REPO="file://$PWD" bash install.sh --suite=cotools --tools=cochat
 ```
 
-## Managing tools
+The local checkout must contain the desired committed files on `main`, or set
+`COTOOLS_BRANCH`. A local install continues to update from that local repository.
 
-Run tools directly; use `cotools` for their lifecycle:
+## Installation and management
+
+- `~/.local/share/cotools` is a complete monorepo clone; override `COTOOLS_HOME`.
+- `~/.local/bin` holds the enabled links plus `cotools`; override `COTOOLS_BIN`.
+- `COTOOLS_REPO` and `COTOOLS_BRANCH` select the upstream for a fresh clone.
+- Existing clones update their configured Git upstream. Keep custom HOME/BIN
+  overrides exported for management commands.
 
 ```bash
-cotools list                 # tools, state, versions, platform and dependency status
-cotools doctor [tool]        # dependency and platform checks
-cotools enable <tool>        # link a tool into ~/.local/bin
-cotools disable <tool>       # remove its link
-cotools update               # update the managed clone and re-link enabled tools
-cotools version [tool]       # bundle or per-tool version
-cotools uninstall            # remove links and clone after confirmation
+cotools list
+cotools doctor [tool]
+cotools enable cobox
+cotools disable cochat
+cotools update
+cotools version [tool]
+cotools uninstall
 ```
 
-`cotools update` treats its installed prefix as a managed mirror: when tracked
-files are clean, it fetches and prunes, then hard-resets to the configured
-upstream branch. This also handles rewritten upstream history. It refuses to
-overwrite tracked local changes; untracked files are left untouched.
+`cotools update` fetches and prunes, then hard-resets a clean managed clone to its
+upstream. It refuses tracked local changes. Update and uninstall refuse a source
+checkout or another suite's prefix. Uninstall prompts and removes only its owned
+symlinks and clone, not harness state or Docker artifacts.
+
+For an old installation, follow the [migration guide](../../docs/migration.md).
+Do not run `cobox uninstall` merely to migrate; preserve its images and volumes.
+Run it first only when intentionally removing box artifacts too.
 
 ## Security
 
-`cochat` and `cosession` only invoke the local Codex CLI. `cobox` is different: it deliberately gives Codex autonomous operation inside a sysbox-isolated Docker container while mounting the selected project and Codex state. It uses Codex's `--dangerously-bypass-approvals-and-sandbox` flag only because sysbox is the external isolation boundary. Read the complete [cobox security model](tools/cobox/README.md#security-model) before using it.
+`cobox` runs Codex with `--dangerously-bypass-approvals-and-sandbox` only inside
+its external sysbox isolation boundary, with writable project and Codex-state
+mounts. Read the [security model](tools/cobox/README.md#security-model).
+The local `cochat` and `cosession` wrappers do not add that flag.
 
 ## Development and releases
 
-```bash
-scripts/dev-setup.sh   # install the pre-push hook
-scripts/check.sh       # shell checks, formatting, tests, assets, and gated cobox smoke test
-```
+From the monorepo root, `scripts/check.sh` checks all suites;
+`scripts/dev-setup.sh` enables the optional root pre-push hook.
+`scripts/release.sh <tool> <version>` creates per-tool `<tool>-vX.Y.Z` tags.
+See the [root release documentation](../../README.md#development).
 
-Release one tool with `scripts/release.sh <tool> <version>`; tags use `<tool>-vX.Y.Z`. The normal check suite runs without a box image, while the final cobox smoke test runs only when both sysbox and the image are available.
-
-## License and attribution
-
-[MIT](LICENSE). Portions of the cobox design are adapted from [RchGrav/claudebox](https://github.com/RchGrav/claudebox) (MIT).
-
-cotools is an independent open-source project. It is not affiliated with or endorsed by OpenAI.
+[MIT](LICENSE). Portions of the box design adapted from
+[RchGrav/claudebox](https://github.com/RchGrav/claudebox) (MIT).
+This project is not affiliated with or endorsed by OpenAI.
