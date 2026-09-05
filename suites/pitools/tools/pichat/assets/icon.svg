@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="16 24 112 112" fill="none" role="img" aria-label="pichat icon">
+  <title>pichat icon</title>
+  <rect x="32" y="42" width="80" height="60" rx="14" fill="#252F3D"/>
+  <polygon points="52,98 48,120 72,100" fill="#252F3D"/>
+  <path d="M165.29 165.29 H517.36 V400 H400 V517.36 H282.65 V634.72 H165.29 Z M282.65 282.65 V400 H400 V282.65 Z M517.36 400 H634.72 V634.72 H517.36 Z" fill="#4B607C" fill-rule="evenodd" transform="translate(48 51) scale(.072) translate(-165.29 -165.29)"/>
+</svg>
