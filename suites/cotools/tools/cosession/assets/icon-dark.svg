@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="16 24 112 112" fill="none" role="img" aria-label="cosession icon for dark backgrounds">
+  <title>cosession icon for dark backgrounds</title>
+  <rect x="44" y="46" width="60" height="16" rx="4" fill="#F4F1EA"/>
+  <rect x="44" y="70" width="64" height="16" rx="4" fill="#10A37F"/>
+  <rect x="44" y="94" width="48" height="16" rx="4" fill="#F4F1EA"/>
+  <circle cx="32" cy="54" r="4" fill="#10A37F" opacity=".4"/>
+  <circle cx="32" cy="78" r="4" fill="#10A37F" opacity=".7"/>
+  <circle cx="32" cy="102" r="4" fill="#10A37F"/>
+</svg>

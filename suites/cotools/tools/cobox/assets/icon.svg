@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="16 24 112 112" fill="none" role="img" aria-label="cobox icon">
+  <title>cobox icon</title>
+  <polygon points="72,40 108,58 72,76 36,58" fill="#10A37F"/>
+  <polygon points="36,58 72,76 72,120 36,102" fill="#16181D"/>
+  <polygon points="72,76 108,58 108,102 72,120" fill="#F4F1EA" stroke="#16181D" stroke-opacity=".32"/>
+  <circle cx="59" cy="57" r="3.5" fill="#F4F1EA"/><circle cx="72" cy="63.5" r="3.5" fill="#F4F1EA" opacity=".7"/><circle cx="85" cy="57" r="3.5" fill="#F4F1EA" opacity=".4"/>
+</svg>

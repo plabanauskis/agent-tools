@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="16 24 112 112" fill="none" role="img" aria-label="cochat icon for dark backgrounds">
+  <title>cochat icon for dark backgrounds</title>
+  <rect x="32" y="44" width="80" height="56" rx="14" fill="#F4F1EA"/>
+  <polygon points="52,96 48,118 72,96" fill="#F4F1EA"/>
+  <circle cx="57" cy="72" r="5" fill="#10A37F"/>
+  <circle cx="72" cy="72" r="5" fill="#10A37F" opacity=".7"/>
+  <circle cx="87" cy="72" r="5" fill="#10A37F" opacity=".4"/>
+</svg>

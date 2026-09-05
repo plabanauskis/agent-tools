@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="360" height="160" viewBox="0 0 360 160" fill="none" role="img" aria-label="cobox wordmark for dark backgrounds">
+  <title>cobox wordmark for dark backgrounds</title>
+  <polygon points="72,40 108,58 72,76 36,58" fill="#10A37F"/>
+  <polygon points="36,58 72,76 72,120 36,102" fill="#F4F1EA"/>
+  <polygon points="72,76 108,58 108,102 72,120" fill="#16181D" stroke="#F4F1EA" stroke-opacity=".2"/>
+  <circle cx="59" cy="57" r="3.5" fill="#F4F1EA"/><circle cx="72" cy="63.5" r="3.5" fill="#F4F1EA" opacity=".7"/><circle cx="85" cy="57" r="3.5" fill="#F4F1EA" opacity=".4"/>
+  <text x="144" y="80" dominant-baseline="central" font-family="DejaVu Sans" font-size="60" font-weight="700" fill="#F4F1EA">cobox</text>
+  <path d="M144 112H213" stroke="#10A37F" stroke-width="6" stroke-linecap="round"/>
+</svg>

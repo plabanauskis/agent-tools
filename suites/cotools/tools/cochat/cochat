@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# cochat — open Codex in a fresh, ephemeral temp dir for a throwaway chat.
+# The temp directory is intentionally retained so cosession can resume it.
+set -euo pipefail
+
+case "${1:-}" in
+  -h | --help)
+    cat <<'EOF'
+cochat — open Codex in a fresh ephemeral temp dir for a throwaway chat.
+
+Usage:
+  cochat [codex args...]   Make a new temp dir, cd into it, and exec 'codex'.
+  cochat --help            Show this help.
+
+The temp dir is created under $TMPDIR (default /tmp) and retained so
+cosession can resume the session later. All arguments are passed unchanged
+to 'codex'.
+EOF
+    exit 0
+    ;;
+esac
+
+dir="$(mktemp -d "${TMPDIR:-/tmp}/cochat.XXXXXX")"
+cd "$dir"
+exec codex "$@"
