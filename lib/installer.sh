@@ -124,7 +124,8 @@ Usage:
 
 Env: ${ENV_PREFIX}_HOME (clone prefix, default ~/.local/share/$SUITE),
      ${ENV_PREFIX}_BIN (default ~/.local/bin), ${ENV_PREFIX}_REPO, ${ENV_PREFIX}_BRANCH.
-Private repository: use authenticated Git or set ${ENV_PREFIX}_REPO to a local checkout.
+The default repository is public; no GitHub account is required.
+For a fork or offline development, set ${ENV_PREFIX}_REPO to its Git URL or local checkout.
 EOF
 }
 

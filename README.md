@@ -5,39 +5,52 @@ shared lifecycle infrastructure, three independently installable suites.
 
 | Purpose | Claude Code | Codex | Pi |
 | --- | --- | --- | --- |
-| Throwaway chat in a fresh temporary directory | <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cctools/tools/cchat/assets/icon-dark.svg"><img src="suites/cctools/tools/cchat/assets/icon.svg" alt="" width="32" height="32"></picture> [cchat](suites/cctools/tools/cchat/README.md) | <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cotools/tools/cochat/assets/icon-dark.svg"><img src="suites/cotools/tools/cochat/assets/icon.svg" alt="" width="32" height="32"></picture> [cochat](suites/cotools/tools/cochat/README.md) | <picture><source media="(prefers-color-scheme: dark)" srcset="suites/pitools/tools/pichat/assets/icon-dark.svg"><img src="suites/pitools/tools/pichat/assets/icon.svg" alt="" width="32" height="32"></picture> [pichat](suites/pitools/tools/pichat/README.md) |
-| Find and resume sessions with fzf | <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cctools/tools/ccsession/assets/icon-dark.svg"><img src="suites/cctools/tools/ccsession/assets/icon.svg" alt="" width="32" height="32"></picture> [ccsession](suites/cctools/tools/ccsession/README.md) | <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cotools/tools/cosession/assets/icon-dark.svg"><img src="suites/cotools/tools/cosession/assets/icon.svg" alt="" width="32" height="32"></picture> [cosession](suites/cotools/tools/cosession/README.md) | <picture><source media="(prefers-color-scheme: dark)" srcset="suites/pitools/tools/pisession/assets/icon-dark.svg"><img src="suites/pitools/tools/pisession/assets/icon.svg" alt="" width="32" height="32"></picture> [pisession](suites/pitools/tools/pisession/README.md) |
-| Path-identical Docker + sysbox sandbox | <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cctools/tools/ccbox/assets/icon-dark.svg"><img src="suites/cctools/tools/ccbox/assets/icon.svg" alt="" width="32" height="32"></picture> [ccbox](suites/cctools/tools/ccbox/README.md) | <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cotools/tools/cobox/assets/icon-dark.svg"><img src="suites/cotools/tools/cobox/assets/icon.svg" alt="" width="32" height="32"></picture> [cobox](suites/cotools/tools/cobox/README.md) | <picture><source media="(prefers-color-scheme: dark)" srcset="suites/pitools/tools/pibox/assets/icon-dark.svg"><img src="suites/pitools/tools/pibox/assets/icon.svg" alt="" width="32" height="32"></picture> [pibox](suites/pitools/tools/pibox/README.md) |
+| Throwaway chat in a fresh temporary directory | [cchat](suites/cctools/tools/cchat/README.md) <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cctools/tools/cchat/assets/icon-dark.svg"><img src="suites/cctools/tools/cchat/assets/icon.svg" alt="" width="32" height="32"></picture> | [cochat](suites/cotools/tools/cochat/README.md) <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cotools/tools/cochat/assets/icon-dark.svg"><img src="suites/cotools/tools/cochat/assets/icon.svg" alt="" width="32" height="32"></picture> | [pichat](suites/pitools/tools/pichat/README.md) <picture><source media="(prefers-color-scheme: dark)" srcset="suites/pitools/tools/pichat/assets/icon-dark.svg"><img src="suites/pitools/tools/pichat/assets/icon.svg" alt="" width="32" height="32"></picture> |
+| Find and resume sessions with fzf | [ccsession](suites/cctools/tools/ccsession/README.md) <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cctools/tools/ccsession/assets/icon-dark.svg"><img src="suites/cctools/tools/ccsession/assets/icon.svg" alt="" width="32" height="32"></picture> | [cosession](suites/cotools/tools/cosession/README.md) <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cotools/tools/cosession/assets/icon-dark.svg"><img src="suites/cotools/tools/cosession/assets/icon.svg" alt="" width="32" height="32"></picture> | [pisession](suites/pitools/tools/pisession/README.md) <picture><source media="(prefers-color-scheme: dark)" srcset="suites/pitools/tools/pisession/assets/icon-dark.svg"><img src="suites/pitools/tools/pisession/assets/icon.svg" alt="" width="32" height="32"></picture> |
+| Path-identical Docker + sysbox sandbox | [ccbox](suites/cctools/tools/ccbox/README.md) <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cctools/tools/ccbox/assets/icon-dark.svg"><img src="suites/cctools/tools/ccbox/assets/icon.svg" alt="" width="32" height="32"></picture> | [cobox](suites/cotools/tools/cobox/README.md) <picture><source media="(prefers-color-scheme: dark)" srcset="suites/cotools/tools/cobox/assets/icon-dark.svg"><img src="suites/cotools/tools/cobox/assets/icon.svg" alt="" width="32" height="32"></picture> | [pibox](suites/pitools/tools/pibox/README.md) <picture><source media="(prefers-color-scheme: dark)" srcset="suites/pitools/tools/pibox/assets/icon-dark.svg"><img src="suites/pitools/tools/pibox/assets/icon.svg" alt="" width="32" height="32"></picture> |
 | Manage installed tools | [cctools](suites/cctools/README.md) | [cotools](suites/cotools/README.md) | [pitools](suites/pitools/README.md) |
 
 Chat/session tools support Linux and macOS. Boxes require Linux amd64, Docker,
 sysbox, and a separately built image. Installing a session picker never builds
 an image or installs a harness.
 
-## Install while this repository is private
+## Install
 
-Authenticate once, clone the complete repository, then choose a suite:
+Requires **Bash, Git, and curl**. No GitHub account, sudo, or pre-existing checkout
+is needed. Choose a suite:
 
 ```bash
-gh auth login
-gh auth setup-git
-gh repo clone plabanauskis/agent-tools
-cd agent-tools
+# Claude Code
+curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=cctools
 
-bash install.sh --suite=pitools --tools=pichat,pisession
-# Or:
-bash install.sh --suite=cotools --tools=cochat,cosession
-bash install.sh --suite=cctools --tools=cchat,ccsession
+# Codex
+curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=cotools
+
+# Pi
+curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=pitools
 ```
 
-The installer uses authenticated Git over HTTPS. An unauthenticated raw GitHub
-`curl | bash` command does **not** work for this private repository. SSH users
-can set the corresponding suite's repository override to
-`git@github.com:plabanauskis/agent-tools.git`.
+The installer prompts for tools when a terminal is available. To install only
+specific tools, append e.g. `--tools=pichat,pisession` to the Pi command. `--all`
+selects every tool in the chosen suite; it never builds a Docker image.
 
-For offline development, clone from your local committed checkout instead:
+Prefer to inspect the installer first (recommended):
 
 ```bash
+curl -fsSL -o install.sh https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh
+less install.sh
+bash install.sh --suite=pitools --tools=pichat,pisession
+```
+
+A standalone or piped installer loads its shared implementation from a temporary
+Git checkout, installs the managed clone, then removes the temporary checkout.
+Running from a complete source checkout reuses that checkout's installer code.
+
+For local development, install from your committed checkout instead:
+
+```bash
+git clone https://github.com/plabanauskis/agent-tools.git
+cd agent-tools
 PITOOLS_REPO="file://$PWD" bash install.sh --suite=pitools --tools=pichat
 ```
 
@@ -54,7 +67,8 @@ first. The new installer refuses to overwrite an unmanaged or legacy directory.
 - `--tools=a,b` enables only those tools; `--all` selects the whole chosen suite.
 - No selection: interactive picker with a TTY, otherwise eligible tools only.
 - `--force` allows links despite missing dependencies/platform support.
-- Suite-specific entrypoints remain available: `bash suites/pitools/install.sh`.
+- From a complete checkout, suite-specific entrypoints remain available:
+  `bash suites/pitools/install.sh`. Use the root URL above for standalone downloads.
 
 | Suite | Clone prefix override | Bin directory override | Upstream overrides |
 | --- | --- | --- | --- |

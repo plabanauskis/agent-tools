@@ -43,7 +43,7 @@ cctools enable cchat
 ```
 
 Or, from the monorepo root: `bash install.sh --suite=cctools --tools=cchat`.
-See the suite guide above for authenticated private-repository installation.
+See the suite guide above for the public one-line installer.
 
 ## Usage
 

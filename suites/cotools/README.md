@@ -20,13 +20,17 @@ Codex-specific session and container behavior.
 
 ## Install
 
-The repository is private. Use authenticated Git, not an unauthenticated raw URL:
+Requires Bash, Git, and curl. No GitHub account or sudo is needed:
 
 ```bash
-gh auth login
-gh auth setup-git
-gh repo clone plabanauskis/agent-tools
-cd agent-tools
+curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=cotools
+```
+
+Append `--tools=cochat,cosession` to enable only those tools. To inspect first:
+
+```bash
+curl -fsSL -o install.sh https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh
+less install.sh
 bash install.sh --suite=cotools --tools=cochat,cosession
 ```
 
@@ -34,9 +38,11 @@ Or run `bash suites/cotools/install.sh` from the monorepo root for the interacti
 picker. `--all` selects the suite; `--force` overrides missing dependencies and
 platform checks. Selecting the lightweight tools never builds a Docker image.
 
-For a local development install:
+For a local development install from the monorepo root:
 
 ```bash
+git clone https://github.com/plabanauskis/agent-tools.git
+cd agent-tools
 COTOOLS_REPO="file://$PWD" bash install.sh --suite=cotools --tools=cochat
 ```
 

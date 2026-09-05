@@ -8,9 +8,13 @@ unchanged. They are not archived, redirected, or automatically updated by this
 migration. Existing installed clones still track their original repositories
 until you explicitly replace them.
 
-The new repository is private. Authenticate Git before installation or updating;
-unauthenticated raw GitHub installer URLs are not a supported private install
-method. See the [root installation guide](../README.md#install-while-this-repository-is-private).
+The repository is public. Installation and updates need no GitHub account.
+See the [root installation guide](../README.md#install) for the standalone
+`curl | bash` installer and read-before-running option.
+
+Already installed from the formerly private **agent-tools** repository? No
+migration is needed: your existing suite's `update` command uses the same URL.
+The steps below apply only to clones of the original separate repositories.
 
 ## Migrate one installed suite
 
@@ -31,12 +35,10 @@ Example for Pi; substitute the suite names and overrides for Claude or Codex:
    and keep them in your backup. Also note custom `PITOOLS_REPO`/`PITOOLS_BRANCH`
    settings; an old repository override must not be reused accidentally.
 
-2. Authenticate and obtain the new source checkout:
+2. Obtain the new source checkout (no authentication required):
 
    ```bash
-   gh auth login
-   gh auth setup-git
-   gh repo clone plabanauskis/agent-tools
+   git clone https://github.com/plabanauskis/agent-tools.git
    cd agent-tools
    ```
 
@@ -117,5 +119,7 @@ not have the `suites/<suite>/` prefix.
 
 The licenses and original tool changelogs remain under each suite. Root shared
 code uses the same MIT license. Original histories can contain older code and
-documentation; audit the full reachable history before making this repository
-public, not only the current tree.
+documentation. The initial public release was checked with Gitleaks against
+both the reachable Git history and current tracked files, with no leaks found.
+Repeat both checks before publishing future imported histories; a clean scan
+is not a guarantee that every sensitive value has been identified.
