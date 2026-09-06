@@ -54,9 +54,9 @@ if [ -z "$SOURCE_ROOT" ]; then
   env_prefix="$(printf '%s' "$suite" | tr '[:lower:]' '[:upper:]')"
   repo_var="${env_prefix}_REPO"
   branch_var="${env_prefix}_BRANCH"
-  repo="${!repo_var:-https://github.com/plabanauskis/agent-tools.git}"
+  repo="${!repo_var:-https://github.com/plabanauskis/harness-tools.git}"
   branch="${!branch_var:-main}"
-  BOOTSTRAP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/agent-tools-bootstrap.XXXXXX")"
+  BOOTSTRAP_DIR="$(mktemp -d "${TMPDIR:-/tmp}/harness-tools-bootstrap.XXXXXX")"
   trap 'rm -rf -- "$BOOTSTRAP_DIR"' EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM

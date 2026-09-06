@@ -1,4 +1,4 @@
-# agent-tools
+# harness-tools
 
 Small terminal helpers for **Claude Code, Codex, and Pi**. One development home,
 shared lifecycle infrastructure, three independently installable suites.
@@ -21,13 +21,13 @@ is needed. Choose a suite:
 
 ```bash
 # Claude Code
-curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=cctools
+curl -fsSL https://raw.githubusercontent.com/plabanauskis/harness-tools/main/install.sh | bash -s -- --suite=cctools
 
 # Codex
-curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=cotools
+curl -fsSL https://raw.githubusercontent.com/plabanauskis/harness-tools/main/install.sh | bash -s -- --suite=cotools
 
 # Pi
-curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=pitools
+curl -fsSL https://raw.githubusercontent.com/plabanauskis/harness-tools/main/install.sh | bash -s -- --suite=pitools
 ```
 
 The installer prompts for tools when a terminal is available. To install only
@@ -37,7 +37,7 @@ selects every tool in the chosen suite; it never builds a Docker image.
 Prefer to inspect the installer first (recommended):
 
 ```bash
-curl -fsSL -o install.sh https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh
+curl -fsSL -o install.sh https://raw.githubusercontent.com/plabanauskis/harness-tools/main/install.sh
 less install.sh
 bash install.sh --suite=pitools --tools=pichat,pisession
 ```
@@ -49,8 +49,8 @@ Running from a complete source checkout reuses that checkout's installer code.
 For local development, install from your committed checkout instead:
 
 ```bash
-git clone https://github.com/plabanauskis/agent-tools.git
-cd agent-tools
+git clone https://github.com/plabanauskis/harness-tools.git
+cd harness-tools
 PITOOLS_REPO="file://$PWD" bash install.sh --suite=pitools --tools=pichat
 ```
 
@@ -78,8 +78,10 @@ first. The new installer refuses to overwrite an unmanaged or legacy directory.
 
 Defaults are `~/.local/share/<suite>`, `~/.local/bin`, this repository, and `main`.
 Each prefix contains a complete monorepo clone and an ignored ownership marker
-`.agent-tools-suite`. Prefixes must remain separate. There is no independently
-installed shared core and no cross-prefix runtime dependency.
+`.agent-tools-suite`. This marker retains its old name so existing installations
+remain compatible after the repository rename. Prefixes must remain separate.
+There is no independently installed shared core or cross-prefix runtime dependency.
+See [repository rename guidance](docs/migration.md#repository-rename) for existing clones.
 
 Keep custom `*_HOME`/`*_BIN` settings in your shell environment when using
 management commands. Existing harness-specific state/configuration variables
@@ -143,6 +145,7 @@ Checks require Bash, Git, jq, shellcheck, shfmt, ripgrep, ImageMagick, and xmlli
 On Debian/Ubuntu, the last two are provided by `imagemagick` and `libxml2-utils`.
 Tests use temporary repositories and fake harness/container commands. Live
 Docker smoke is explicitly opt-in and never builds an image automatically.
+The `AGENT_TOOLS_SMOKE` switch retains its established name for compatibility.
 
 Release tools independently:
 

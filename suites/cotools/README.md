@@ -9,7 +9,7 @@
 # cotools
 
 Three focused Codex terminal helpers, now maintained in the
-[agent-tools monorepo](../../README.md). Shared installation and management code;
+[harness-tools monorepo](../../README.md). Shared installation and management code;
 Codex-specific session and container behavior.
 
 | Tool | Purpose | Dependencies | Platform |
@@ -23,13 +23,13 @@ Codex-specific session and container behavior.
 Requires Bash, Git, and curl. No GitHub account or sudo is needed:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=cotools
+curl -fsSL https://raw.githubusercontent.com/plabanauskis/harness-tools/main/install.sh | bash -s -- --suite=cotools
 ```
 
 Append `--tools=cochat,cosession` to enable only those tools. To inspect first:
 
 ```bash
-curl -fsSL -o install.sh https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh
+curl -fsSL -o install.sh https://raw.githubusercontent.com/plabanauskis/harness-tools/main/install.sh
 less install.sh
 bash install.sh --suite=cotools --tools=cochat,cosession
 ```
@@ -41,8 +41,8 @@ platform checks. Selecting the lightweight tools never builds a Docker image.
 For a local development install from the monorepo root:
 
 ```bash
-git clone https://github.com/plabanauskis/agent-tools.git
-cd agent-tools
+git clone https://github.com/plabanauskis/harness-tools.git
+cd harness-tools
 COTOOLS_REPO="file://$PWD" bash install.sh --suite=cotools --tools=cochat
 ```
 

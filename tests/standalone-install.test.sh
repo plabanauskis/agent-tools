@@ -91,7 +91,7 @@ assert 'failed clone leaves no prefix' test ! -e "$SANDBOX/rejected prefix"
 # Help and invalid bootstrap arguments must not invoke Git or require a checkout.
 mkdir "$SANDBOX/fakebin"
 # shellcheck disable=SC2016 # Expanded by the fake Git process, not this test.
-printf '#!/usr/bin/env bash\nprintf invoked >"$GIT_RECORD"\nexit 1\n' >"$SANDBOX/fakebin/git"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\n" "$@" >"$GIT_RECORD"' 'exit 1' >"$SANDBOX/fakebin/git"
 chmod +x "$SANDBOX/fakebin/git"
 PATH="$SANDBOX/fakebin:$PATH" GIT_RECORD="$SANDBOX/git-record" bash "$SANDBOX/download/install.sh" --help >"$SANDBOX/help"
 assert 'standalone help needs no Git' test ! -e "$SANDBOX/git-record"
@@ -100,4 +100,21 @@ reject 'unknown suite rejected before Git' env PATH="$SANDBOX/fakebin:$PATH" GIT
 reject 'unknown flag rejected before Git' env PATH="$SANDBOX/fakebin:$PATH" GIT_RECORD="$SANDBOX/git-record" \
   bash "$SANDBOX/download/install.sh" --suite=pitools --unknown
 assert 'invalid arguments need no Git' test ! -e "$SANDBOX/git-record"
+
+# Both installer layers must default to the renamed repository. Mock only the
+# bootstrap Git call so the test cannot silently pass via GitHub's old redirect.
+for suite in cctools cotools pitools; do
+  reject "$suite default bootstrap reaches Git" env -i PATH="$SANDBOX/fakebin:$PATH" \
+    HOME="$SANDBOX/home" TMPDIR="$SANDBOX/bootstrap tmp" GIT_RECORD="$SANDBOX/git-record" \
+    bash "$SANDBOX/download/install.sh" --suite="$suite" --all
+  assert "$suite bootstrap uses canonical repository" grep -Fxq \
+    'https://github.com/plabanauskis/harness-tools.git' "$SANDBOX/git-record"
+  assert "$suite default bootstrap failure cleans temporary checkout" bootstrap_clean
+  # shellcheck disable=SC2016 # Expanded inside the isolated shell.
+  default_repo="$(env -i PATH="$PATH" HOME="$SANDBOX/home" bash -euc \
+    'SOURCE_ROOT="$1"; source "$1/lib/installer.sh"; installer_init "$2"; printf "%s" "$REPO_URL"' \
+    _ "$CHECKOUT" "$suite")"
+  assert "$suite shared installer uses canonical repository" test "$default_repo" = \
+    'https://github.com/plabanauskis/harness-tools.git'
+done
 printf '%d passed, 0 failed\n' "$PASS"

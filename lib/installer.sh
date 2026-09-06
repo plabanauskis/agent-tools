@@ -5,7 +5,7 @@
 
 installer_init() {
   configure_suite "$1" || return 1
-  REPO_URL="$(suite_env REPO 'https://github.com/plabanauskis/agent-tools.git')"
+  REPO_URL="$(suite_env REPO 'https://github.com/plabanauskis/harness-tools.git')"
   PREFIX="$(suite_env HOME "$HOME/.local/share/$SUITE")"
   BIN_DIR="$(suite_env BIN "$HOME/.local/bin")"
   BRANCH="$(suite_env BRANCH main)"
@@ -30,9 +30,10 @@ clone_or_update() {
     git clone --branch "$BRANCH" "$REPO_URL" "$PREFIX" || return 1
     PREFIX="$(cd "$PREFIX" && pwd -P)" || return 1
     if [ ! -f "$PREFIX/lib/installer.sh" ] || [ ! -d "$PREFIX/suites/$SUITE/tools" ]; then
-      echo "$SUITE: cloned repository is not an agent-tools monorepo; no links created." >&2
+      echo "$SUITE: cloned repository is not a harness-tools monorepo; no links created." >&2
       return 1
     fi
+    # Keep the original marker name: existing installed clones depend on it.
     printf '%s\n' "$SUITE" >"$PREFIX/.agent-tools-suite"
   fi
 }

@@ -21,7 +21,7 @@ configure_suite() {
       BOX=pibox
       ;;
     *)
-      echo "agent-tools: unknown suite '$SUITE'" >&2
+      echo "harness-tools: unknown suite '$SUITE'" >&2
       return 1
       ;;
   esac

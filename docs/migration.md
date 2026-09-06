@@ -2,7 +2,7 @@
 
 ## What has and has not moved
 
-Development is consolidated in `plabanauskis/agent-tools`. The original
+Development is consolidated in `plabanauskis/harness-tools`. The original
 `cctools`, `cotools`, and `pitools` repositories and source checkouts are left
 unchanged. They are not archived, redirected, or automatically updated by this
 migration. Existing installed clones still track their original repositories
@@ -12,9 +12,40 @@ The repository is public. Installation and updates need no GitHub account.
 See the [root installation guide](../README.md#install) for the standalone
 `curl | bash` installer and read-before-running option.
 
-Already installed from the formerly private **agent-tools** repository? No
-migration is needed: your existing suite's `update` command uses the same URL.
-The steps below apply only to clones of the original separate repositories.
+Already installed from this monorepo, formerly named **agent-tools**? No
+reinstall is needed; see the rename guidance below. The separate-repository
+migration procedure applies only to clones of the original three repositories.
+
+## Repository rename
+
+The GitHub repository was renamed from `plabanauskis/agent-tools` to
+`plabanauskis/harness-tools`; it was not recreated. Commit IDs, tags, issues,
+releases, and public visibility are preserved. The separate `agentic-tools`
+repository is unrelated and unchanged.
+
+GitHub redirects old repository Git URLs, but explicitly updating each clone's
+origin avoids depending on that redirect. For example, for a Pi installation:
+
+```bash
+prefix="${PITOOLS_HOME:-$HOME/.local/share/pitools}"
+git -C "$prefix" remote get-url origin   # inspect before changing a fork/mirror
+git -C "$prefix" remote set-url origin https://github.com/plabanauskis/harness-tools.git
+```
+
+Apply the equivalent change to other suite clones only if their origin was the
+old monorepo, not an intentional fork or one of the original suite repositories.
+Update exported `*_REPO` overrides and any saved installer commands too.
+
+For a development checkout, rename its local directory if desired and update
+its Git origin to the new URL. If an installed clone uses a `file://` origin
+pointing to that checkout, update it to the checkout's new absolute path;
+GitHub redirects cannot repair local filesystem URLs. Likewise, manually linked
+commands pointing directly into a moved development checkout need new targets.
+
+Keep suite prefixes, command names, environment overrides, Docker image/volume
+names, and the `.agent-tools-suite` ownership marker unchanged. That marker
+intentionally retains its old name so existing installations still pass the
+update/uninstall ownership checks. No Docker rebuild or state migration is needed.
 
 ## Migrate one installed suite
 
@@ -38,8 +69,8 @@ Example for Pi; substitute the suite names and overrides for Claude or Codex:
 2. Obtain the new source checkout (no authentication required):
 
    ```bash
-   git clone https://github.com/plabanauskis/agent-tools.git
-   cd agent-tools
+   git clone https://github.com/plabanauskis/harness-tools.git
+   cd harness-tools
    ```
 
    If you already have this checkout, use it rather than cloning again.
@@ -60,7 +91,7 @@ Example for Pi; substitute the suite names and overrides for Claude or Codex:
 
    ```bash
    # Example: only these two were previously enabled; use your saved selection.
-   PITOOLS_REPO=https://github.com/plabanauskis/agent-tools.git PITOOLS_BRANCH=main \
+   PITOOLS_REPO=https://github.com/plabanauskis/harness-tools.git PITOOLS_BRANCH=main \
      bash install.sh --suite=pitools --tools=pichat,pisession
    ```
 
@@ -98,7 +129,7 @@ backup location, restore the old clone to its original prefix, and restore
 owned command symlinks to the original layout using the old manager's `enable`
 commands. Restore the manager symlink to `<prefix>/bin/<suite>` as well. Do not
 run the new manager's uninstall after restoring the old clone; it is intentionally
-not marked as installer-managed agent-tools state.
+not marked as installer-managed monorepo state.
 
 ## Source history
 

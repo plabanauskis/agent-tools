@@ -37,7 +37,7 @@ done
 need_file README.md
 
 # Keep public/local install, Pi state/session, exact-install, and isolation promises visible.
-need_text README.md 'curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=pitools'
+need_text README.md 'curl -fsSL https://raw.githubusercontent.com/plabanauskis/harness-tools/main/install.sh | bash -s -- --suite=pitools'
 need_text README.md 'bash install.sh --suite=pitools'
 need_text README.md 'No GitHub account or sudo is needed'
 need_text README.md "PITOOLS_REPO=\"file://\$PWD\""

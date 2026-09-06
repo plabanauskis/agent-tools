@@ -49,7 +49,7 @@ done
 for readme in README.md tools/cochat/README.md tools/cosession/README.md tools/cobox/README.md; do
   need_readme "$readme"
 done
-need_text README.md 'curl -fsSL https://raw.githubusercontent.com/plabanauskis/agent-tools/main/install.sh | bash -s -- --suite=cotools'
+need_text README.md 'curl -fsSL https://raw.githubusercontent.com/plabanauskis/harness-tools/main/install.sh | bash -s -- --suite=cotools'
 need_text README.md 'bash install.sh --suite=cotools'
 need_text README.md 'No GitHub account or sudo is needed'
 need_text README.md 'not affiliated with or endorsed by OpenAI'
